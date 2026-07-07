@@ -1,0 +1,26 @@
+node_modules
+.git
+.vercel
+dist
+*.log
+
+# Documentation
+*.md
+
+# Test & quality
+src/test/
+
+# Temp files
+supabase/.temp
+
+# Supabase backend (deployed separately)
+supabase/migrations/
+supabase/functions/
+
+# Lock files (npm is primary)
+bun.lock
+bun.lockb
+
+# Lovable AI platform
+.lovable/
+.agents
