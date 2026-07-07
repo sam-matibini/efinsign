@@ -1,0 +1,11 @@
+# eFinSign
+
+> Eco-friendly electronic signature platform. Send, sign, and manage legally binding documents online while reducing paper waste.
+
+eFinSign is a multi-tenant document signing platform that lets individuals and organizations upload PDFs, place signature and form fields, and request signatures via email, WhatsApp, or SMS. Owners can self-sign, share documents with external signers through secure links, and store reusable templates. The platform tracks every action and produces a finalized, tamper-evident signed PDF.
+
+## Pages
+
+- [Home](/landing): Product overview, features, pricing, and security details.
+- [Sign In / Sign Up](/auth): Account access and 7-day free trial signup.
+- [Reset Password](/reset-password): Recover access to an existing account.

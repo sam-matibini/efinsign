@@ -1,0 +1,1 @@
+ALTER TABLE public.documents ADD COLUMN signed_file_path text;

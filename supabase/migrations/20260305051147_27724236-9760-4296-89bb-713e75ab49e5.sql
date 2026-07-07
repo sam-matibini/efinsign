@@ -1,0 +1,1 @@
+ALTER TABLE public.templates ADD COLUMN tags text[] NOT NULL DEFAULT '{}';
