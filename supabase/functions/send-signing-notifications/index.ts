@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const siteUrl = "https://sign-lover-app.lovable.app";
+    const siteUrl = "https://www.efinsign.ca";
     const results: { email: string; success: boolean; error?: string }[] = [];
 
     for (let i = 0; i < signers.length; i++) {

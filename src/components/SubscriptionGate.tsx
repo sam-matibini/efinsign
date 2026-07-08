@@ -119,11 +119,11 @@ export default function SubscriptionGate({ children }: { children: React.ReactNo
         </h2>
         <p className="text-muted-foreground text-sm mt-1">Pick a plan and pay to activate your account.</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-5xl w-full">
+      <div className="flex flex-wrap gap-4 max-w-5xl w-full justify-center">
         {plans.map((plan) => (
           <Card
             key={plan.id}
-            className={`relative flex flex-col transition hover:shadow-lg ${
+            className={`relative flex flex-col flex-1 basis-full sm:basis-[calc(50%-0.5rem)] lg:basis-[calc(25%-0.75rem)] transition hover:shadow-lg ${
               plan.highlighted ? "border-primary shadow-md ring-2 ring-primary/20" : "border-border/50"
             }`}
           >
