@@ -1,39 +1,29 @@
 ## Goal
-Make the **signer review screen** and **Download Signed Copy** features actually visible to signers.
+Add three legal pages (Privacy Policy, Terms of Service, Cookie Policy) tailored to eFinSign, governed by Ontario, Canada law, with `support@efin.money` as the contact. Link them from the landing page footer only.
 
-## Root cause
-The code is already in `src/pages/Sign.tsx`:
-- Review gate: lines 586–699 (`if (!reviewed) return <ReviewScreen>`).
-- Download button + handler: lines 497–541, rendered inside the "Document Signed!" card at line 553.
+## Pages to create
+All three pages share a consistent layout matching the existing `Trust.tsx` styling (same header, container width, card-based sections, `#003D8F` brand accent, back-to-landing link).
 
-If the `/sign?token=…` page jumps straight to the fields, the public URL is serving an older deployed bundle. The Lovable preview and the published site are independent — edits show in the preview immediately but the published custom domain (efinsign.ca) needs to be re-published.
+- **`src/pages/PrivacyPolicy.tsx`** — PIPEDA-aligned Canadian privacy notice covering: information collected (account, org, uploaded documents, signer data, usage/analytics), purposes of use, legal basis, disclosure to subprocessors (Supabase/Lovable Cloud, Stripe, Resend, Google Gemini — mirrors Trust page list), storage & security, retention, user rights (access, correction, withdrawal, deletion), international transfers, children's privacy, changes to the policy, and contact.
+- **`src/pages/TermsOfService.tsx`** — Ontario-governed terms covering: acceptance, description of service, account/eligibility, acceptable use, org admin responsibilities, electronic signatures & e-doc validity notice, subscriptions & billing (Stripe), intellectual property, third-party services, disclaimers, limitation of liability, indemnity, termination, changes, governing law (Ontario, Canada) & venue, and contact.
+- **`src/pages/CookiePolicy.tsx`** — what cookies/local storage are used for: authentication session tokens (Supabase), theme preference, and essential app state. States no third-party advertising cookies. Explains browser controls and effect of disabling.
 
-## Plan
+All content is generic legal placeholder wording — the user should have counsel review before production. A visible "Last updated" date and a short disclaimer noting this is not legal advice will be included.
 
-### 1. Re-publish the app
-Trigger a publish so `efinsign.ca` serves the current `Sign.tsx`. After publishing, open the signer link in an incognito window (to bypass cached JS) and confirm:
-- Review screen appears first with the PDF preview, sender, consent checkbox, and Start signing button.
-- After signing, the success card shows the **Download Signed Copy** button and the download succeeds.
+## Routing
+Update `src/App.tsx` to add three public routes (no auth required):
+- `/privacy` → `PrivacyPolicy`
+- `/terms` → `TermsOfService`
+- `/cookies` → `CookiePolicy`
 
-### 2. Harden the review screen so it can never be silently skipped
-Even if a future deploy lag happens again, the review screen should not collapse. Update `src/pages/Sign.tsx`:
-- Render the review screen unconditionally when `signer.status === "pending"` and `!reviewed`, regardless of whether `pdfUrl` finished loading — show a clear "Preview unavailable" state with a Retry button instead of an empty card.
-- Keep the **Start signing** button enabled when the PDF fails to load, but show a confirmation dialog ("Document preview failed to load — sign anyway?") so signers are never blocked.
+## Landing footer
+Update `src/pages/Landing.tsx` footer to add three links (Privacy Policy · Terms of Service · Cookie Policy) alongside any existing footer content, styled to match the current landing dark theme.
 
-### 3. Make Download Signed Copy resilient
-In the success card download handler:
-- If `get-signing-pdf` with `variant: "signed"` returns 404, fall back once to regenerating via `generateAndUploadSignedPdf`, then retry the fetch.
-- Surface server error messages from `get-signing-pdf` / `upload-signed-pdf` in the toast instead of a generic message.
+## SEO
+Each page sets `<title>` and `<meta description>` via a small `useEffect` (pattern already used elsewhere in the app), plus a single H1.
 
-### 4. Verify edge functions are deployed
-Confirm `get-signing-pdf` and `upload-signed-pdf` are deployed (they exist under `supabase/functions/`). Call each with a known-good signer token and confirm a signed URL / 200 response. If either is missing, redeploy.
-
-### 5. Manual end-to-end check
-Send a test document to a signer email, click the link in incognito, confirm:
-- Review screen shows.
-- Consent → Start signing → fields → Submit.
-- Success card → Download Signed Copy returns the signed PDF with applied signatures.
+## Sitemap
+Add `/privacy`, `/terms`, `/cookies` entries to `public/sitemap.xml`.
 
 ## Out of scope
-- Owner-side review/download flow (already works on `DocumentDetail`).
-- Changes to the PDF rendering pipeline itself.
+- No database changes, no cookie consent banner, no analytics changes, no changes to auth/app-shell footers (per your "landing page footer only" choice).
