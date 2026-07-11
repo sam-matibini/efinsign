@@ -26,6 +26,9 @@ import SubscriptionGate from "./components/SubscriptionGate";
 import React, { Suspense } from "react";
 const Landing = React.lazy(() => import("./pages/Landing"));
 import Trust from "./pages/Trust";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import CookiePolicy from "./pages/CookiePolicy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +64,9 @@ const App = () => (
               <Route path="/landing" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>}><Landing /></Suspense>} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/trust" element={<Trust />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/cookies" element={<CookiePolicy />} />
               <Route path="/sign" element={<Sign />} />
               <Route path="/invite" element={<AcceptInvite />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
