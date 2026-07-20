@@ -21,6 +21,7 @@ import ClientsPage from "./pages/ClientsPage";
 import OrgSettings from "./pages/OrgSettings";
 import AdminDashboard from "./pages/AdminDashboard";
 import Sign from "./pages/Sign";
+import EmbedSign from "./pages/EmbedSign";
 import AcceptInvite from "./pages/AcceptInvite";
 import SubscriptionGate from "./components/SubscriptionGate";
 import React, { Suspense } from "react";
@@ -68,6 +69,7 @@ const App = () => (
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/cookies" element={<CookiePolicy />} />
               <Route path="/sign" element={<Sign />} />
+              <Route path="/embed/sign" element={<EmbedSign />} />
               <Route path="/invite" element={<AcceptInvite />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
               <Route element={<ProtectedRoute><SubscriptionGate><OrganizationProvider><AppLayout /></OrganizationProvider></SubscriptionGate></ProtectedRoute>}>

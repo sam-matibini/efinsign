@@ -18,7 +18,6 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          pdf: ['pdfjs-dist', 'pdf-lib'],
           charts: ['recharts'],
         },
       },
@@ -28,5 +27,8 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  optimizeDeps: {
+    include: ["pdf-lib"],
   },
 }));

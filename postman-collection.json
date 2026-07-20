@@ -1,0 +1,406 @@
+{
+  "info": {
+    "name": "eFinSign API v1.0",
+    "description": "Complete API collection for eFinSign e-signature platform. \n\n**Setup:** Set `baseUrl` and `apiKey` in collection variables. Get a sandbox key from Settings → API Keys in the eFinSign dashboard.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api" },
+    { "key": "apiKey", "value": "efsk_test_YOUR_SANDBOX_KEY" },
+    { "key": "documentId", "value": "" },
+    { "key": "signerId", "value": "" },
+    { "key": "fieldId", "value": "" },
+    { "key": "templateId", "value": "" },
+    { "key": "webhookId", "value": "" },
+    { "key": "clientId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{apiKey}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Meta",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/status", "host": ["{{baseUrl}}"], "path": ["status"] } }
+        },
+        {
+          "name": "API Info",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}", "host": ["{{baseUrl}}"], "path": [""] } },
+          "auth": { "type": "noauth" }
+        },
+        {
+          "name": "OpenAPI Spec",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/openapi.json", "host": ["{{baseUrl}}"], "path": ["openapi.json"] } },
+          "auth": { "type": "noauth" }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Upload & Create Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('documentId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "file", "type": "file", "src": "" },
+              { "key": "title", "value": "Test Document", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/documents", "host": ["{{baseUrl}}"], "path": ["documents"] }
+          }
+        },
+        {
+          "name": "List Documents",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents?status=draft&page=1&per_page=10",
+              "host": ["{{baseUrl}}"], "path": ["documents"],
+              "query": [
+                { "key": "status", "value": "draft", "disabled": true },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Document",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}"] } }
+        },
+        {
+          "name": "Update Document",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\": \"Updated Title\"}" },
+            "url": { "raw": "{{baseUrl}}/documents/{{documentId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}"] }
+          }
+        },
+        {
+          "name": "Delete Document",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}"] } }
+        },
+        {
+          "name": "Download PDF",
+          "event": [],
+          "request": {
+            "method": "GET", "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{documentId}}/download?type=original",
+              "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "download"],
+              "query": [{ "key": "type", "value": "original" }]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Log",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/audit-log", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "audit-log"] } }
+        },
+        {
+          "name": "Send for Signing",
+          "event": [],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/send", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "send"] } }
+        },
+        {
+          "name": "Void Document",
+          "event": [],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/void", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "void"] } }
+        },
+        {
+          "name": "Remind Signers",
+          "event": [],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/remind", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "remind"] } }
+        }
+      ]
+    },
+    {
+      "name": "Signers & Fields",
+      "item": [
+        {
+          "name": "Add Signer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('signerId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\": \"John Doe\", \"email\": \"john@example.com\", \"order\": 0, \"fields\": [{\"type\": \"signature\", \"page\": 1, \"x\": 100, \"y\": 500, \"w\": 200, \"h\": 50}, {\"type\": \"date\", \"page\": 1, \"x\": 350, \"y\": 500, \"w\": 150, \"h\": 30}]}" },
+            "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers"] }
+          }
+        },
+        {
+          "name": "List Signers",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers"] } }
+        },
+        {
+          "name": "Update Signer",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"order\": 1}" },
+            "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers/{{signerId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers", "{{signerId}}"] }
+          }
+        },
+        {
+          "name": "Remove Signer",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers/{{signerId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers", "{{signerId}}"] } }
+        },
+        {
+          "name": "Add Field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('fieldId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"type\": \"signature\", \"page\": 1, \"x\": 100, \"y\": 600, \"w\": 200, \"h\": 50}" },
+            "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers/{{signerId}}/fields", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers", "{{signerId}}", "fields"] }
+          }
+        },
+        {
+          "name": "Update Field",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"w\": 250}" },
+            "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers/{{signerId}}/fields/{{fieldId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers", "{{signerId}}", "fields", "{{fieldId}}"] }
+          }
+        },
+        {
+          "name": "Remove Field",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/documents/{{documentId}}/signers/{{signerId}}/fields/{{fieldId}}", "host": ["{{baseUrl}}"], "path": ["documents", "{{documentId}}", "signers", "{{signerId}}", "fields", "{{fieldId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Create Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var json = pm.response.json();", "if (json && json.data && json.data.id) {", "  pm.collectionVariables.set('templateId', json.data.id);", "}"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\": \"NDA Template\", \"description\": \"Standard NDA\", \"signers\": [{\"name\": \"Party A\", \"email\": \"\"}], \"tags\": [\"legal\"]}" },
+            "url": { "raw": "{{baseUrl}}/templates", "host": ["{{baseUrl}}"], "path": ["templates"] }
+          }
+        },
+        {
+          "name": "List Templates",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/templates", "host": ["{{baseUrl}}"], "path": ["templates"] } }
+        },
+        {
+          "name": "Get Template",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["templates", "{{templateId}}"] } }
+        },
+        {
+          "name": "Create Document from Template",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"title\": \"NDA - Acme Corp\"}" },
+            "url": { "raw": "{{baseUrl}}/templates/{{templateId}}/documents", "host": ["{{baseUrl}}"], "path": ["templates", "{{templateId}}", "documents"] }
+          }
+        },
+        {
+          "name": "Delete Template",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["templates", "{{templateId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Embed",
+      "item": [
+        {
+          "name": "Get Signing URL",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"document_id\": \"{{documentId}}\", \"signer_email\": \"john@example.com\"}" },
+            "url": { "raw": "{{baseUrl}}/embed/signing-url", "host": ["{{baseUrl}}"], "path": ["embed", "signing-url"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register Webhook",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var json = pm.response.json();", "if (json && json.data && json.data.id) {", "  pm.collectionVariables.set('webhookId', json.data.id);", "  console.log('Webhook secret:', json.data.secret);", "}"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"url\": \"https://webhook.site/your-endpoint\", \"events\": [\"document.completed\", \"document.signer_signed\"]}" },
+            "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] }
+          }
+        },
+        {
+          "name": "List Webhooks",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/webhooks", "host": ["{{baseUrl}}"], "path": ["webhooks"] } }
+        },
+        {
+          "name": "Test Webhook",
+          "event": [],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/webhooks/{{webhookId}}/test", "host": ["{{baseUrl}}"], "path": ["webhooks", "{{webhookId}}", "test"] } }
+        },
+        {
+          "name": "Delete Webhook",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/webhooks/{{webhookId}}", "host": ["{{baseUrl}}"], "path": ["webhooks", "{{webhookId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Organization",
+      "item": [
+        {
+          "name": "Get Organization",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/organization", "host": ["{{baseUrl}}"], "path": ["organization"] } }
+        },
+        {
+          "name": "Update Organization",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\": \"My Company\"}" },
+            "url": { "raw": "{{baseUrl}}/organization", "host": ["{{baseUrl}}"], "path": ["organization"] }
+          }
+        },
+        {
+          "name": "Get Usage",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/organization/usage", "host": ["{{baseUrl}}"], "path": ["organization", "usage"] } }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        {
+          "name": "Create Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var json = pm.response.json();", "if (json && json.data && json.data.id) {", "  pm.collectionVariables.set('clientId', json.data.id);", "}"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\": \"Jane Smith\", \"email\": \"jane@acmecorp.com\", \"company\": \"Acme Corp\", \"address\": \"123 Main St\", \"city\": \"New York\", \"country\": \"US\"}" },
+            "url": { "raw": "{{baseUrl}}/clients", "host": ["{{baseUrl}}"], "path": ["clients"] }
+          }
+        },
+        {
+          "name": "List Clients",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/clients?page=1&per_page=10", "host": ["{{baseUrl}}"], "path": ["clients"], "query": [{ "key": "page", "value": "1" }, { "key": "per_page", "value": "10" }] } }
+        },
+        {
+          "name": "Get Client",
+          "event": [],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/clients/{{clientId}}", "host": ["{{baseUrl}}"], "path": ["clients", "{{clientId}}"] } }
+        },
+        {
+          "name": "Update Client",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"city\": \"San Francisco\"}" },
+            "url": { "raw": "{{baseUrl}}/clients/{{clientId}}", "host": ["{{baseUrl}}"], "path": ["clients", "{{clientId}}"] }
+          }
+        },
+        {
+          "name": "Delete Client",
+          "event": [],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/clients/{{clientId}}", "host": ["{{baseUrl}}"], "path": ["clients", "{{clientId}}"] } }
+        }
+      ]
+    }
+  ]
+}

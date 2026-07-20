@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Build outputs
+developers-portal/.vitepress/dist
+developers-portal/.vitepress/cache
+sdk/dist
+
+# Supabase
+supabase/.temp
+
 # Environment / secrets
 .env
 .env.*

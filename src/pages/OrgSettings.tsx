@@ -18,9 +18,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send } from "lucide-react";
+import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy, ArrowUp } from "lucide-react";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Member {
   id: string;
@@ -49,6 +50,30 @@ interface SavedSignature {
   is_default: boolean;
   created_at: string;
 }
+
+interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  mode: string;
+  scopes: string[];
+  last_used_at: string | null;
+  usage_count: number;
+  usage_limit: number;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+const AVAILABLE_SCOPES = [
+  { value: "documents:read", label: "Read documents" },
+  { value: "documents:write", label: "Create & modify documents" },
+  { value: "signing:send", label: "Send for signing" },
+  { value: "webhooks:manage", label: "Manage webhooks" },
+  { value: "org:read", label: "Read organization" },
+  { value: "org:write", label: "Update organization" },
+  { value: "clients:read", label: "Read clients" },
+  { value: "clients:write", label: "Manage clients" },
+];
 
 export default function OrgSettings() {
   const { currentOrg, role } = useOrganization();
@@ -84,6 +109,18 @@ export default function OrgSettings() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createType, setCreateType] = useState<"signature" | "initials">("signature");
 
+  // API Keys
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [loadingKeys, setLoadingKeys] = useState(true);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [keyName, setKeyName] = useState("");
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [upgrading, setUpgrading] = useState<string | null>(null);
+
   const isAdmin = role === "admin";
 
   useEffect(() => {
@@ -100,6 +137,7 @@ export default function OrgSettings() {
     fetchInvitations();
     fetchSignatures();
     fetchSeatUsage();
+    fetchApiKeys();
   }, [currentOrg]);
 
   const fetchSeatUsage = async () => {
@@ -388,6 +426,97 @@ export default function OrgSettings() {
     }
   };
 
+  // API Key management
+  const fetchApiKeys = async () => {
+    if (!currentOrg) return;
+    setLoadingKeys(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("api-keys-list", { body: {} });
+      if (error) {
+        toast.error(error.message || "Failed to load API keys");
+      } else if (data?.data) {
+        setApiKeys(data.data as ApiKey[]);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load API keys");
+    }
+    setLoadingKeys(false);
+  };
+
+  const handleGenerateKey = async () => {
+    if (!keyName.trim() || selectedScopes.length === 0) return;
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("api-keys-generate", {
+        body: { name: keyName.trim(), scopes: selectedScopes },
+      });
+      if (error) {
+        toast.error(error.message || "Failed to generate key");
+      } else if (data?.data?.key) {
+        setGeneratedKey(data.data.key);
+        setKeyName("");
+        setSelectedScopes([]);
+        fetchApiKeys();
+        toast.success("API key generated");
+      } else {
+        toast.error("Unexpected response from server");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate key");
+    }
+    setGenerating(false);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success("Copied to clipboard");
+    }).catch(() => {
+      toast.error("Failed to copy");
+    });
+  };
+
+  const handleRevoke = async () => {
+    if (!revokeId) return;
+    setRevoking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("api-keys-revoke", {
+        body: { key_id: revokeId },
+      });
+      if (error) {
+        toast.error(error.message || "Failed to revoke key");
+      } else {
+        toast.success("API key revoked");
+        fetchApiKeys();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to revoke key");
+    }
+    setRevoking(false);
+    setRevokeId(null);
+  };
+
+  const handleUpgrade = async (keyId: string) => {
+    setUpgrading(keyId);
+    try {
+      const { data, error } = await supabase.functions.invoke("api-keys-upgrade", {
+        body: { key_id: keyId },
+      });
+      if (error) {
+        toast.error(error.message || "Failed to upgrade key");
+      } else if (data?.data?.success) {
+        toast.success("Key upgraded to production");
+        fetchApiKeys();
+      } else if (data?.error) {
+        toast.error(data.error.message || "Failed to upgrade key");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upgrade key");
+    }
+    setUpgrading(null);
+  };
+
+  const scopeLabel = (value: string) => AVAILABLE_SCOPES.find((s) => s.value === value)?.label || value;
+
   const roleColors: Record<string, string> = {
     admin: "text-primary",
     manager: "text-primary/80",
@@ -634,6 +763,103 @@ export default function OrgSettings() {
         </CardContent>
       </Card>
 
+      {/* API Keys */}
+      <Card className="bg-card/60 border-border/50">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              API Keys
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Manage API keys for programmatic access. Sandbox keys are free and watermarked.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => {
+              setGeneratedKey(null);
+              setKeyName("");
+              setSelectedScopes([]);
+              setGenerateOpen(true);
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Generate
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {loadingKeys ? (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : apiKeys.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No API keys yet. Generate one to get started.</p>
+          ) : (
+            <div className="space-y-3">
+              {apiKeys.map((key) => (
+                <div key={key.id} className="p-3 rounded-lg border border-border/50 bg-secondary/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-medium truncate">{key.name}</p>
+                      <Badge variant={key.mode === "production" ? "default" : "secondary"} className="text-[10px]">
+                        {key.mode}
+                      </Badge>
+                      {key.revoked_at && (
+                        <Badge variant="destructive" className="text-[10px]">revoked</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!key.revoked_at && key.mode === "sandbox" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => handleUpgrade(key.id)}
+                          disabled={upgrading === key.id}
+                        >
+                          <ArrowUp className="h-3 w-3" />
+                          {upgrading === key.id ? "Upgrading..." : "Upgrade"}
+                        </Button>
+                      )}
+                      {!key.revoked_at && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => setRevokeId(key.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <code className="bg-secondary/60 px-1.5 py-0.5 rounded text-[11px]">{key.key_prefix}...</code>
+                    <span>&middot;</span>
+                    <span>{key.usage_count}/{key.usage_limit} calls</span>
+                    {key.last_used_at && (
+                      <>
+                        <span>&middot;</span>
+                        <span>Last used {new Date(key.last_used_at).toLocaleDateString()}</span>
+                      </>
+                    )}
+                  </div>
+                  {key.scopes.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {key.scopes.map((scope) => (
+                        <Badge key={scope} variant="outline" className="text-[10px] bg-transparent">
+                          {scopeLabel(scope)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Pending Invitations */}
       {isAdmin && invitations.length > 0 && (
         <Card className="bg-card/60 border-border/50">
@@ -776,6 +1002,110 @@ export default function OrgSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Generate API Key Dialog */}
+      <Dialog open={generateOpen} onOpenChange={(open) => { if (!open) { setGenerateOpen(false); setGeneratedKey(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{generatedKey ? "API Key Generated" : "Generate API Key"}</DialogTitle>
+            <DialogDescription>
+              {generatedKey
+                ? "Copy this key now. It will not be shown again."
+                : "Create a sandbox API key for development and testing."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {generatedKey ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-secondary/60 px-3 py-2 rounded text-sm break-all font-mono">
+                  {generatedKey}
+                </code>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => copyToClipboard(generatedKey)}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sandbox mode &middot; Watermarked PDFs &middot; No real emails &middot; 100 docs/month
+              </p>
+              <Button
+                className="w-full"
+                onClick={() => { setGenerateOpen(false); setGeneratedKey(null); }}
+              >
+                Done
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Key Name</Label>
+                <Input
+                  value={keyName}
+                  onChange={(e) => setKeyName(e.target.value)}
+                  placeholder="e.g. Development, efinsuite-staging"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Scopes</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {AVAILABLE_SCOPES.map((scope) => (
+                    <label key={scope.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={selectedScopes.includes(scope.value)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedScopes([...selectedScopes, scope.value]);
+                          } else {
+                            setSelectedScopes(selectedScopes.filter((s) => s !== scope.value));
+                          }
+                        }}
+                      />
+                      {scope.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setGenerateOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={handleGenerateKey}
+                  disabled={!keyName.trim() || selectedScopes.length === 0 || generating}
+                >
+                  {generating ? "Generating..." : "Generate Key"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke API Key Dialog */}
+      <AlertDialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This key will stop working immediately. Any application using this key will receive 401 errors. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevoke}
+              disabled={revoking}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {revoking ? "Revoking..." : "Revoke Key"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
