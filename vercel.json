@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "cd developers-portal && npm install && npm run build && cd .. && NODE_OPTIONS=--max-old-space-size=6144 npm run build && node scripts/copy-docs.mjs && node scripts/verify-build.mjs",
+  "buildCommand": "NODE_OPTIONS=--max-old-space-size=6144 npm run build && node scripts/copy-docs.mjs && node scripts/verify-build.mjs",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/developers/(.*)", "destination": "/developers/$1" },

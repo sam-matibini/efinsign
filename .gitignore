@@ -13,8 +13,6 @@ dist-ssr
 *.local
 
 # Build outputs
-developers-portal/.vitepress/dist
-developers-portal/.vitepress/cache
 sdk/dist
 
 # Supabase

@@ -1,0 +1,1 @@
+import{_ as i,o as a,c as n,a2 as t}from"./chunks/framework.CxN14L7e.js";const g=JSON.parse('{"title":"SDK Overview","description":"","frontmatter":{},"headers":[],"relativePath":"sdk.md","filePath":"sdk.md"}'),e={name:"sdk.md"};function h(l,s,p,k,E,d){return a(),n("div",null,[...s[0]||(s[0]=[t("",22)])])}const y=i(e,[["render",h]]);export{g as __pageData,y as default};
