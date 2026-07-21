@@ -1,11 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
   "buildCommand": "NODE_OPTIONS=--max-old-space-size=6144 npm run build && node scripts/copy-docs.mjs && node scripts/verify-build.mjs",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/developers/(.*)", "destination": "/developers/$1" },
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+    { "source": "/((?!assets/|developers/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
