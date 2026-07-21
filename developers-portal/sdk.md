@@ -1,21 +1,17 @@
 # SDK Overview
 
-The official eFinSign JavaScript/TypeScript SDK (`@efinsign/api`) provides a type-safe, promise-based interface to the REST API.
-
-::: info Coming Soon
-The SDK is currently in development. This page documents the planned API. For now, use the [REST API directly](/api-reference).
-:::
+The official eFinSign JavaScript/TypeScript SDK (`efinsign-api`) provides a type-safe, promise-based interface to the REST API.
 
 ## Installation
 
 ```bash
-npm install @efinsign/api
+npm install efinsign-api
 ```
 
 ## Quick Example
 
 ```typescript
-import { eFinSign } from "@efinsign/api";
+import { eFinSign } from "efinsign-api";
 
 const efi = new eFinSign({
   apiKey: process.env.EFINSIGN_API_KEY,

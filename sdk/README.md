@@ -1,17 +1,17 @@
-# @efinsign/api
+# efinsign-api
 
 Official TypeScript/JavaScript SDK for the [eFinSign](https://efinsign.ca) e-signature API.
 
 ## Installation
 
 ```bash
-npm install @efinsign/api
+npm install efinsign-api
 ```
 
 ## Quickstart
 
 ```typescript
-import { eFinSign } from "@efinsign/api";
+import { eFinSign } from "efinsign-api";
 
 const efi = new eFinSign({
   apiKey: process.env.EFINSIGN_API_KEY,

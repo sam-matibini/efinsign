@@ -1,5 +1,5 @@
 {
-  "name": "@efinsign/api",
+  "name": "efinsign-api",
   "version": "1.0.0",
   "description": "Official TypeScript/JavaScript SDK for the eFinSign e-signature API",
   "license": "MIT",
