@@ -7,6 +7,7 @@ const src = join(__dirname, "..", "developers-portal", ".vitepress", "dist");
 const dest = join(__dirname, "..", "dist", "developers");
 
 try {
+  await fs.mkdir(dest, { recursive: true });
   await fs.cp(src, dest, { recursive: true });
   if (existsSync(join(dest, "index.html"))) {
     console.log("✓ Copied developer docs to dist/developers");
