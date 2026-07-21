@@ -139,6 +139,7 @@ export default function DocumentPrepare() {
         .from("saved_signatures" as any)
         .select("*")
         .eq("organization_id", currentOrg.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (data) {
         const sigs = (data as any[]).filter((s: any) => s.type === "signature");
