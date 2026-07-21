@@ -140,8 +140,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Rate limit ──
-    const limit = auth.mode === "production" ? 1000 : 60;
-    if (!checkRateLimit(auth.key_id, limit)) {
+    if (!checkRateLimit(auth.key_id, 1000)) {
       return errorResponse(429, "rate_limited", "Too many requests. Please slow down.");
     }
 

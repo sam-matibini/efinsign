@@ -7,11 +7,11 @@ export const openapiSpec = {
       "Programmatic access to eFinSign's e-signature platform. Create documents, add signers, send for signing, and track completion — all via REST.\n\n" +
       "## Authentication\n" +
       "All endpoints (except `/status` and `/`) require an API key passed as a Bearer token:\n" +
-      "```\nAuthorization: Bearer efsk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n" +
+      "```\nAuthorization: Bearer efsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n" +
       "## Environments\n" +
       "| Mode | Key Prefix | Emails | PDFs | Limit |\n" +
       "|------|-----------|--------|------|-------|\n" +
-      "| Sandbox | `efsk_test_` | Not sent | Watermarked | 100 docs/mo, 60 req/min |\n" +
+      "| Sandbox | `efsk_live_` | Not sent | Watermarked | 100 docs/mo, 60 req/min |\n" +
       "| Production | `efsk_live_` | Real (Resend) | Clean | Plan-based, 1000 req/min |\n\n" +
       "## Pagination\n" +
       "List endpoints support `?page=1&per_page=50`. Response includes `meta` with `total`, `total_pages`.\n\n" +
@@ -386,7 +386,7 @@ export const openapiSpec = {
       ApiKeyAuth: {
         type: "http",
         scheme: "bearer",
-        description: "API key in format `efsk_test_xxx` (sandbox) or `efsk_live_xxx` (production). Generate keys from Settings → API Keys.",
+        description: "API key in format `efsk_live_xxx` (sandbox) or `efsk_live_xxx` (production). Generate keys from Settings → API Keys.",
       },
     },
     parameters: {

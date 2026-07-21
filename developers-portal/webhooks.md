@@ -6,7 +6,7 @@ Learn how to receive real-time events from eFinSign with verified HMAC signature
 
 ```bash
 curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/webhooks \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://yourapp.com/webhooks/efinsign",
@@ -123,7 +123,7 @@ def verify_signature(payload, signature_header, secret, tolerance=300):
 
 ```bash
 curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/webhooks/wh_abc123/test \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY"
+  -H "Authorization: Bearer efsk_live_YOUR_KEY"
 ```
 
 This queues a test event that will be delivered to your endpoint.
@@ -134,7 +134,7 @@ List your webhooks to see delivery status:
 
 ```bash
 curl https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/webhooks \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY"
+  -H "Authorization: Bearer efsk_live_YOUR_KEY"
 ```
 
 Each webhook shows `last_success_at`, `last_attempt_at`, and `failure_count`.

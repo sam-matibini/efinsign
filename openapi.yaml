@@ -9,13 +9,13 @@ info:
     ## Authentication
     All endpoints (except `/status` and `/`) require an API key passed as a Bearer token:
     ```
-    Authorization: Bearer efsk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    Authorization: Bearer efsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     ```
 
     ## Environments
     | Mode | Key Prefix | Emails | PDFs | Limit |
     |------|-----------|--------|------|-------|
-    | Sandbox | `efsk_test_` | Not sent | Watermarked | 100 docs/mo, 60 req/min |
+    | Production key. Real emails, clean PDFs, 1000 req/min |
     | Production | `efsk_live_` | Real (Resend) | Clean | Plan-based, 1000 req/min |
 
     ## Pagination
@@ -802,7 +802,7 @@ components:
       type: http
       scheme: bearer
       description: |
-        API key in format `efsk_test_xxx` (sandbox) or `efsk_live_xxx` (production).
+        API key in format `efsk_live_xxx` (sandbox) or `efsk_live_xxx` (production).
         Generate keys from Settings → API Keys in the eFinSign dashboard.
 
   parameters:

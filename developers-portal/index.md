@@ -30,26 +30,19 @@ features:
     title: Templates
     details: Create reusable templates with pre-placed fields. Instantiate documents from templates in one API call.
   - icon: 🔑
-    title: Sandbox & Production
-    details: Free sandbox keys for testing. Upgrade to production when you're ready. No credit card required to start.
+    title: Production API Keys
+    details: Generate API keys instantly from your dashboard. No credit card required to start.
 ---
 
 ## Quickstart
 
 ```bash
 curl -X POST https://api.efinsign.ca/functions/v1/api/documents \
-  -H "Authorization: Bearer efsk_test_YOUR_SANDBOX_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -F "file=@contract.pdf" \
   -F "title=Service Agreement"
 ```
 
 [Start building →](/quickstart)
 
-## Supported Environments
-
-| Mode | Key Prefix | Emails | PDFs | Rate Limit |
-|------|-----------|--------|------|------------|
-| **Sandbox** | `efsk_test_` | Not sent | Watermarked | 60 req/min |
-| **Production** | `efsk_live_` | Real | Clean | 1000 req/min |
-
-Get your sandbox key instantly from [Settings → API Keys](https://efinsign.ca/settings/organization) in the eFinSign dashboard.
+Get your API key instantly from [Settings → API Keys](https://efinsign.ca/settings/organization) in the eFinSign dashboard.

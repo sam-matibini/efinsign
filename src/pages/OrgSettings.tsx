@@ -18,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy, ArrowUp } from "lucide-react";
+import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy } from "lucide-react";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -119,7 +119,6 @@ export default function OrgSettings() {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
-  const [upgrading, setUpgrading] = useState<string | null>(null);
 
   const isAdmin = role === "admin";
 
@@ -495,26 +494,6 @@ export default function OrgSettings() {
     setRevokeId(null);
   };
 
-  const handleUpgrade = async (keyId: string) => {
-    setUpgrading(keyId);
-    try {
-      const { data, error } = await supabase.functions.invoke("api-keys-upgrade", {
-        body: { key_id: keyId },
-      });
-      if (error) {
-        toast.error(error.message || "Failed to upgrade key");
-      } else if (data?.data?.success) {
-        toast.success("Key upgraded to production");
-        fetchApiKeys();
-      } else if (data?.error) {
-        toast.error(data.error.message || "Failed to upgrade key");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to upgrade key");
-    }
-    setUpgrading(null);
-  };
-
   const scopeLabel = (value: string) => AVAILABLE_SCOPES.find((s) => s.value === value)?.label || value;
 
   const roleColors: Record<string, string> = {
@@ -772,7 +751,7 @@ export default function OrgSettings() {
               API Keys
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Manage API keys for programmatic access. Sandbox keys are free and watermarked.
+              Manage API keys for programmatic access.
             </p>
           </div>
           <Button
@@ -809,18 +788,6 @@ export default function OrgSettings() {
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {!key.revoked_at && key.mode === "sandbox" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => handleUpgrade(key.id)}
-                          disabled={upgrading === key.id}
-                        >
-                          <ArrowUp className="h-3 w-3" />
-                          {upgrading === key.id ? "Upgrading..." : "Upgrade"}
-                        </Button>
-                      )}
                       {!key.revoked_at && (
                         <Button
                           size="icon"
@@ -1011,7 +978,7 @@ export default function OrgSettings() {
             <DialogDescription>
               {generatedKey
                 ? "Copy this key now. It will not be shown again."
-                : "Create a sandbox API key for development and testing."}
+                : "Generate an API key for programmatic access."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1031,7 +998,7 @@ export default function OrgSettings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Sandbox mode &middot; Watermarked PDFs &middot; No real emails &middot; 100 docs/month
+                Production key &middot; Real emails &middot; Clean PDFs
               </p>
               <Button
                 className="w-full"

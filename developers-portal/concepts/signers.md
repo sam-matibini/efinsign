@@ -53,7 +53,7 @@ Field positions use PDF coordinate space. The easiest way to get coordinates is 
 
 ```bash
 curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/documents/doc_123/signers \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",

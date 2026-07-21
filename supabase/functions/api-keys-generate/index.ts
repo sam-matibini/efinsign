@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       return errorResponse(400, "no_organization", "User is not a member of any organization");
     }
 
-    const rawKey = generateApiKey("sandbox");
+    const rawKey = generateApiKey();
     const keyHash = await hashKey(rawKey);
     const keyPrefix = rawKey.slice(0, 16);
 
@@ -59,8 +59,9 @@ Deno.serve(async (req) => {
         name,
         key_prefix: keyPrefix,
         key_hash: keyHash,
-        mode: "sandbox",
+        mode: "production",
         scopes,
+        usage_limit: 10000,
         created_by: userId,
       });
 
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
         data: {
           key: rawKey,
           name,
-          mode: "sandbox",
+          mode: "production",
           scopes,
           message: "Store this key securely. It will not be shown again.",
         },

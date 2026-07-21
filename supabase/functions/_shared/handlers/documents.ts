@@ -268,8 +268,6 @@ export async function sendDocument(_req: Request, params: Record<string, string>
     return errorResponse(400, "no_signers", "Document must have at least one signer");
   }
 
-  const isSandbox = ctx.mode === "sandbox";
-
   const { error: updateErr } = await supabase
     .from("documents")
     .update({ status: "pending" })
@@ -277,14 +275,12 @@ export async function sendDocument(_req: Request, params: Record<string, string>
 
   if (updateErr) return errorResponse(500, "send_failed", updateErr.message);
 
-  if (!isSandbox) {
-    try {
-      await supabase.functions.invoke("send-signing-notifications", {
-        body: { document_id: params.id },
-      });
-    } catch {
-      // notification failure shouldn't block the send
-    }
+  try {
+    await supabase.functions.invoke("send-signing-notifications", {
+      body: { document_id: params.id },
+    });
+  } catch {
+    // notification failure shouldn't block the send
   }
 
   try {
@@ -300,13 +296,7 @@ export async function sendDocument(_req: Request, params: Record<string, string>
     .single();
 
   return new Response(JSON.stringify({
-    data: {
-      ...refreshed,
-      sandbox: isSandbox,
-      message: isSandbox
-        ? "Document sent (sandbox mode — no emails sent)"
-        : "Document sent for signing",
-    },
+    data: refreshed,
   }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -358,22 +348,16 @@ export async function remindDocument(_req: Request, params: Record<string, strin
   if (!doc) return errorResponse(404, "not_found", "Document not found");
   if (doc.status !== "pending") return errorResponse(400, "invalid_status", "Only pending documents can receive reminders");
 
-  if (ctx.mode !== "sandbox") {
-    try {
-      await supabase.functions.invoke("send-signing-notifications", {
-        body: { document_id: params.id, reminder: true },
-      });
-    } catch {
-      // non-blocking
-    }
+  try {
+    await supabase.functions.invoke("send-signing-notifications", {
+      body: { document_id: params.id, reminder: true },
+    });
+  } catch {
+    // non-blocking
   }
 
   return new Response(JSON.stringify({
-    data: {
-      success: true,
-      sandbox: ctx.mode === "sandbox",
-      message: ctx.mode === "sandbox" ? "Reminder logged (sandbox)" : "Reminder sent",
-    },
+    data: { success: true, message: "Reminder sent" },
   }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },

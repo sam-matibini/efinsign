@@ -8,7 +8,7 @@ You can create a template from a PDF file or define it with just metadata:
 
 ```bash
 curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/templates \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "NDA Template",
@@ -31,7 +31,7 @@ curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/templates
 
 ```bash
 curl -X POST https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/templates/tmpl_456/documents \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"title": "NDA - Acme Corp"}'
 ```
@@ -40,7 +40,7 @@ This creates a new draft document with all signers and fields pre-populated from
 
 ```bash
 curl -X PATCH https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api/documents/doc_789/signers/signer_001 \
-  -H "Authorization: Bearer efsk_test_YOUR_KEY" \
+  -H "Authorization: Bearer efsk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"email": "legal@acmecorp.com"}'
 ```

@@ -94,8 +94,8 @@ export function requireScope(auth: AuthResult, requiredScope: string): void {
   }
 }
 
-export function generateApiKey(mode: "sandbox" | "production" = "sandbox"): string {
-  const prefix = mode === "sandbox" ? "efsk_test_" : "efsk_live_";
+export function generateApiKey(): string {
+  const prefix = "efsk_live_";
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);

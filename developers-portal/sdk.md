@@ -114,7 +114,7 @@ efi.clients.delete(id)
 
 ```typescript
 const efi = new eFinSign({
-  apiKey: "efsk_test_xxx",     // Your API key
+  apiKey: "efsk_live_xxx",     // Your API key
   baseUrl: undefined,           // Optional: override base URL
   timeout: 30000,               // Request timeout in ms (default: 30s)
   maxRetries: 3,                // Retry on 429/5xx (default: 3)

@@ -16,10 +16,9 @@ First public release of the eFinSign API.
 - **Clients API** — Address book CRUD (5 endpoints)
 
 **Authentication:**
-- Bearer token API keys (`efsk_test_` / `efsk_live_`)
+- Bearer token API keys (`efsk_live_`)
 - Scope-based access control (8 scopes)
-- Sandbox mode with instant key generation
-- Production mode tied to subscription plans
+- Instant key generation from dashboard
 
 **Webhooks:**
 - Event-driven with HMAC-SHA256 signatures
