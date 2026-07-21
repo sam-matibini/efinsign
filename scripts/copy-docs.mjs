@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,7 +8,13 @@ const dest = join(__dirname, "..", "dist", "developers");
 
 try {
   await fs.cp(src, dest, { recursive: true });
-  console.log("✓ Copied developer docs to dist/developers");
+  if (existsSync(join(dest, "index.html"))) {
+    console.log("✓ Copied developer docs to dist/developers");
+  } else {
+    console.error("✗ Copy completed but dist/developers/index.html is missing");
+    process.exit(1);
+  }
 } catch (err) {
   console.error("✗ Failed to copy developer docs:", err.message);
+  process.exit(1);
 }
