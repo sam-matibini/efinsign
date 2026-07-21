@@ -1,8 +1,10 @@
 import { promises as fs } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const src = join(import.meta.dirname, "..", "developers-portal", ".vitepress", "dist");
-const dest = join(import.meta.dirname, "..", "dist", "developers");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const src = join(__dirname, "..", "developers-portal", ".vitepress", "dist");
+const dest = join(__dirname, "..", "dist", "developers");
 
 try {
   await fs.cp(src, dest, { recursive: true });
