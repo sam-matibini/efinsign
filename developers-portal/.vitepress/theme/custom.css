@@ -1,0 +1,210 @@
+/* ===== Fonts — matching efinsign.ca ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+/* ===== VitePress CSS Variable Overrides ===== */
+:root {
+  /* Typography */
+  --vp-font-family-base: 'Inter', sans-serif;
+
+  /* Background — clean white matching main app */
+  --vp-c-bg: #FFFFFF;
+  --vp-c-bg-soft: hsl(214, 30%, 95%);
+  --vp-c-bg-elv: #FFFFFF;
+  --vp-c-bg-alt: hsl(214, 30%, 95%);
+
+  /* Brand / Primary — efinsign deep blue #003D8F */
+  --vp-c-brand-1: hsl(214, 100%, 28%);
+  --vp-c-brand-2: hsl(214, 80%, 40%);
+  --vp-c-brand-3: hsl(214, 100%, 22%);
+  --vp-c-brand-soft: hsl(214, 100%, 95%);
+
+  /* Text */
+  --vp-c-text-1: hsl(214, 55%, 15%);
+  --vp-c-text-2: hsl(214, 18%, 50%);
+  --vp-c-text-3: hsl(214, 15%, 65%);
+
+  /* Borders */
+  --vp-c-border: hsl(214, 25%, 88%);
+  --vp-c-divider: hsl(214, 25%, 90%);
+  --vp-c-gutter: hsl(214, 25%, 90%);
+
+  /* Sidebar — dark navy matching main app sidebar */
+  --vp-sidebar-bg-color: hsl(214, 100%, 15%);
+
+  /* Nav — clean white */
+  --vp-nav-bg-color: rgba(255, 255, 255, 0.85);
+  --vp-nav-bg-color-blur: rgba(255, 255, 255, 0.85);
+
+  /* Code */
+  --vp-code-bg: hsl(214, 30%, 95%);
+  --vp-code-color: hsl(214, 55%, 20%);
+
+  /* Badge / tip colors */
+  --vp-c-tip-1: hsl(214, 100%, 28%);
+  --vp-c-tip-2: hsl(214, 30%, 95%);
+  --vp-c-tip-3: hsl(214, 20%, 80%);
+  --vp-c-tip-soft: hsl(214, 100%, 97%);
+
+  --vp-c-warning-1: hsl(38, 92%, 45%);
+  --vp-c-warning-2: hsl(38, 92%, 55%);
+  --vp-c-warning-soft: hsl(38, 92%, 95%);
+
+  --vp-c-danger-1: hsl(0, 72%, 51%);
+  --vp-c-danger-2: hsl(0, 72%, 60%);
+  --vp-c-danger-soft: hsl(0, 72%, 97%);
+
+  /* Success green */
+  --vp-c-success-1: hsl(142, 72%, 37%);
+  --vp-c-success-2: hsl(142, 72%, 45%);
+  --vp-c-success-soft: hsl(142, 72%, 95%);
+
+  /* Custom properties */
+  --vp-custom-block-tip-border: hsl(214, 100%, 28%);
+  --vp-custom-block-tip-bg: hsl(214, 100%, 97%);
+  --vp-custom-block-info-border: hsl(214, 50%, 60%);
+  --vp-custom-block-info-bg: hsl(214, 50%, 97%);
+
+  /* Home hero */
+  --vp-home-hero-name-color: hsl(214, 100%, 28%);
+  --vp-home-hero-name-background: linear-gradient(135deg, hsl(214, 100%, 28%), hsl(214, 80%, 45%));
+  --vp-home-hero-image-background-image: linear-gradient(135deg, hsl(214, 100%, 28%), hsl(214, 80%, 45%));
+  --vp-home-hero-image-filter: blur(60px);
+}
+
+/* ===== Dark Mode ===== */
+.dark {
+  /* Background — dark navy matching main app */
+  --vp-c-bg: hsl(214, 55%, 7%);
+  --vp-c-bg-soft: hsl(214, 55%, 10%);
+  --vp-c-bg-elv: hsl(214, 55%, 10%);
+  --vp-c-bg-alt: hsl(214, 55%, 12%);
+
+  /* Brand — brighter blue for dark */
+  --vp-c-brand-1: hsl(214, 80%, 45%);
+  --vp-c-brand-2: hsl(214, 80%, 55%);
+  --vp-c-brand-3: hsl(214, 80%, 35%);
+  --vp-c-brand-soft: hsl(214, 40%, 16%);
+
+  /* Text */
+  --vp-c-text-1: hsl(214, 30%, 90%);
+  --vp-c-text-2: hsl(214, 20%, 60%);
+  --vp-c-text-3: hsl(214, 15%, 45%);
+
+  /* Borders */
+  --vp-c-border: hsl(214, 40%, 20%);
+  --vp-c-divider: hsl(214, 40%, 18%);
+  --vp-c-gutter: hsl(214, 40%, 18%);
+
+  /* Sidebar — even darker */
+  --vp-sidebar-bg-color: hsl(214, 55%, 8%);
+
+  /* Nav — translucent dark */
+  --vp-nav-bg-color: rgba(8, 13, 23, 0.85);
+  --vp-nav-bg-color-blur: rgba(8, 13, 23, 0.85);
+
+  /* Code */
+  --vp-code-bg: hsl(214, 40%, 14%);
+  --vp-code-color: hsl(214, 30%, 85%);
+
+  /* Tip colors */
+  --vp-c-tip-1: hsl(214, 80%, 55%);
+  --vp-c-tip-2: hsl(214, 40%, 16%);
+  --vp-c-tip-soft: hsl(214, 40%, 12%);
+
+  --vp-c-warning-1: hsl(38, 92%, 55%);
+  --vp-c-warning-2: hsl(38, 92%, 65%);
+  --vp-c-warning-soft: hsl(38, 40%, 12%);
+
+  --vp-c-danger-1: hsl(0, 72%, 60%);
+  --vp-c-danger-2: hsl(0, 72%, 70%);
+  --vp-c-danger-soft: hsl(0, 40%, 12%);
+
+  --vp-c-success-1: hsl(142, 72%, 45%);
+  --vp-c-success-2: hsl(142, 72%, 55%);
+  --vp-c-success-soft: hsl(142, 40%, 12%);
+
+  /* Home hero */
+  --vp-home-hero-name-color: hsl(214, 80%, 55%);
+  --vp-home-hero-name-background: linear-gradient(135deg, hsl(214, 80%, 55%), hsl(214, 60%, 70%));
+  --vp-home-hero-image-background-image: linear-gradient(135deg, hsl(214, 80%, 45%), hsl(214, 60%, 60%));
+}
+
+/* ===== Heading Font — Space Grotesk matching main app ===== */
+h1, h2, h3, h4, h5, h6,
+.VPHero .name,
+.VPHero .text,
+.VPFeature .title,
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-family: 'Space Grotesk', sans-serif !important;
+}
+
+/* ===== Sidebar link styling ===== */
+.VPSidebar .link {
+  color: hsl(214, 30%, 80%);
+}
+.VPSidebar .link:hover {
+  color: #FFFFFF;
+}
+.VPSidebar .link.active {
+  background: hsl(214, 80%, 22%);
+  color: #FFFFFF;
+  border-radius: 8px;
+}
+.VPSidebar .group h2 {
+  color: hsl(214, 30%, 80%) !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-weight: 600;
+}
+
+/* ===== Nav styling ===== */
+.VPNavBarTitle .title {
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-weight: 700;
+}
+
+/* ===== Card-like containers ===== */
+.vp-doc .custom-block {
+  border-radius: 12px;
+  border: 1px solid hsl(214, 25%, 88%);
+}
+
+.dark .vp-doc .custom-block {
+  border-color: hsl(214, 40%, 20%);
+}
+
+/* ===== Table styling ===== */
+.vp-doc table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ===== Code blocks ===== */
+.vp-doc div[class*='language-'] {
+  border-radius: 10px;
+}
+
+/* ===== Buttons ===== */
+.VPButton.brand {
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+/* ===== Feature cards on home page ===== */
+.VPFeature {
+  border-radius: 12px;
+  border: 1px solid hsl(214, 25%, 88%);
+  background: hsl(214, 30%, 98%);
+}
+
+.dark .VPFeature {
+  border-color: hsl(214, 40%, 20%);
+  background: hsl(214, 55%, 12%);
+}
+
+/* ===== Smooth transitions ===== */
+.VPSidebar, .VPNav, .VPFeature, .VPButton {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
