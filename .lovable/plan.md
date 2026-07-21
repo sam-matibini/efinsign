@@ -1,29 +1,26 @@
-## Goal
-Add three legal pages (Privacy Policy, Terms of Service, Cookie Policy) tailored to eFinSign, governed by Ontario, Canada law, with `support@efin.money` as the contact. Link them from the landing page footer only.
+## Problem
 
-## Pages to create
-All three pages share a consistent layout matching the existing `Trust.tsx` styling (same header, container width, card-based sections, `#003D8F` brand accent, back-to-landing link).
+Saved signatures in Fill & Sign are scoped to the **organization**, not the user. When the Zambia admin opens a document, they see your signature/initials because both queries filter only by `organization_id`. Signatures need to be per-user so each member (admin or otherwise) has their own.
 
-- **`src/pages/PrivacyPolicy.tsx`** — PIPEDA-aligned Canadian privacy notice covering: information collected (account, org, uploaded documents, signer data, usage/analytics), purposes of use, legal basis, disclosure to subprocessors (Supabase/Lovable Cloud, Stripe, Resend, Google Gemini — mirrors Trust page list), storage & security, retention, user rights (access, correction, withdrawal, deletion), international transfers, children's privacy, changes to the policy, and contact.
-- **`src/pages/TermsOfService.tsx`** — Ontario-governed terms covering: acceptance, description of service, account/eligibility, acceptable use, org admin responsibilities, electronic signatures & e-doc validity notice, subscriptions & billing (Stripe), intellectual property, third-party services, disclaimers, limitation of liability, indemnity, termination, changes, governing law (Ontario, Canada) & venue, and contact.
-- **`src/pages/CookiePolicy.tsx`** — what cookies/local storage are used for: authentication session tokens (Supabase), theme preference, and essential app state. States no third-party advertising cookies. Explains browser controls and effect of disabling.
+## Fix
 
-All content is generic legal placeholder wording — the user should have counsel review before production. A visible "Last updated" date and a short disclaimer noting this is not legal advice will be included.
+Scope every `saved_signatures` read/write by the currently signed-in `user_id` in addition to `organization_id`.
 
-## Routing
-Update `src/App.tsx` to add three public routes (no auth required):
-- `/privacy` → `PrivacyPolicy`
-- `/terms` → `TermsOfService`
-- `/cookies` → `CookiePolicy`
+### `src/pages/DocumentPrepare.tsx`
+- Load query (~L138): add `.eq("user_id", user.id)` so only the current user's signatures load.
+- `persistSignature` / `persistInitials`: already insert with `user_id: user.id` — no change.
+- `deleteSavedSig`: add `.eq("user_id", user.id)` as a safety guard.
 
-## Landing footer
-Update `src/pages/Landing.tsx` footer to add three links (Privacy Policy · Terms of Service · Cookie Policy) alongside any existing footer content, styled to match the current landing dark theme.
+### `src/pages/OrgSettings.tsx` (Signatures tab)
+- `fetchSignatures` (~L366): add `.eq("user_id", user.id)`.
+- `handleSetDefault` (~L395): scope the "clear defaults" update with `.eq("user_id", user.id)` so it only resets the current user's defaults.
+- `handleRenameSig` / `handleDeleteSig`: add `.eq("user_id", user.id)` guard.
+- UI copy: rename the tab/heading from any "Organization Signatures" wording to "My Signatures" so it's clear these are personal.
 
-## SEO
-Each page sets `<title>` and `<meta description>` via a small `useEffect` (pattern already used elsewhere in the app), plus a single H1.
+### No DB migration
+The `saved_signatures` table already has `user_id`. RLS presumably already permits per-user access; we're just tightening the client queries so users no longer see each other's signatures. If after this change the Zambia admin still sees nothing where they should see their own, we'll revisit RLS in a follow-up.
 
-## Sitemap
-Add `/privacy`, `/terms`, `/cookies` entries to `public/sitemap.xml`.
-
-## Out of scope
-- No database changes, no cookie consent banner, no analytics changes, no changes to auth/app-shell footers (per your "landing page footer only" choice).
+## Verification
+- Sign in as the Zambia admin → open a document → Fill & Sign shows empty "Add Signature" / "Add Initials" until they create their own.
+- Sign in as the owner → still sees only the owner's signatures.
+- Org Settings → Signatures tab shows only the current user's saved signatures.

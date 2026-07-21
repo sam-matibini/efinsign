@@ -139,6 +139,7 @@ export default function DocumentPrepare() {
         .from("saved_signatures" as any)
         .select("*")
         .eq("organization_id", currentOrg.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (data) {
         const sigs = (data as any[]).filter((s: any) => s.type === "signature");
@@ -179,7 +180,8 @@ export default function DocumentPrepare() {
   };
 
   const deleteSavedSig = async (sigId: string) => {
-    await supabase.from("saved_signatures" as any).delete().eq("id", sigId);
+    if (!user) return;
+    await supabase.from("saved_signatures" as any).delete().eq("id", sigId).eq("user_id", user.id);
     setDbSignatures((prev) => prev.filter((s) => s.id !== sigId));
     setDbInitials((prev) => prev.filter((s) => s.id !== sigId));
   };

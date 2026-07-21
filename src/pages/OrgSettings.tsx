@@ -363,17 +363,19 @@ export default function OrgSettings() {
 
   // Signature management functions
   const fetchSignatures = async () => {
-    if (!currentOrg) return;
+    if (!currentOrg || !user) return;
     const { data } = await supabase
       .from("saved_signatures")
       .select("*")
       .eq("organization_id", currentOrg.id as any)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     if (data) setSignatures(data as any);
   };
 
   const handleRenameSig = async (id: string) => {
-    const { error } = await supabase.from("saved_signatures").update({ label: editLabel }).eq("id", id);
+    if (!user) return;
+    const { error } = await supabase.from("saved_signatures").update({ label: editLabel }).eq("id", id).eq("user_id", user.id);
     if (error) toast.error(error.message);
     else {
       toast.success("Renamed");
@@ -383,7 +385,8 @@ export default function OrgSettings() {
   };
 
   const handleDeleteSig = async (id: string) => {
-    const { error } = await supabase.from("saved_signatures").delete().eq("id", id);
+    if (!user) return;
+    const { error } = await supabase.from("saved_signatures").delete().eq("id", id).eq("user_id", user.id);
     if (error) toast.error(error.message);
     else {
       toast.success("Deleted");
@@ -392,15 +395,18 @@ export default function OrgSettings() {
   };
 
   const handleSetDefault = async (sig: SavedSignature) => {
+    if (!user) return;
     await supabase
       .from("saved_signatures")
       .update({ is_default: false } as any)
       .eq("organization_id", currentOrg!.id as any)
+      .eq("user_id", user.id)
       .eq("type", sig.type);
     const { error } = await supabase
       .from("saved_signatures")
       .update({ is_default: true } as any)
-      .eq("id", sig.id);
+      .eq("id", sig.id)
+      .eq("user_id", user.id);
     if (error) toast.error(error.message);
     else {
       toast.success("Set as default");
