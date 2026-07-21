@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Allow pre-built docs (deployed with SPA)
+!developers-portal/.vitepress/dist
+
 # Build outputs
 sdk/dist
 
