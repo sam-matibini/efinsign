@@ -10,9 +10,10 @@ function getSupabase() {
 }
 
 function generateToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  // const bytes = new Uint8Array(32);
+  // crypto.getRandomValues(bytes);
+  // return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return crypto.randomUUID();
 }
 
 export async function addSigner(req: Request, params: Record<string, string>, ctx: { organization_id: string }) {
