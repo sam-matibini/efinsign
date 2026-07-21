@@ -8,7 +8,14 @@ const dest = join(__dirname, "..", "dist", "developers");
 
 try {
   await fs.mkdir(dest, { recursive: true });
-  await fs.cp(src, dest, { recursive: true });
+
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    await fs.cp(srcPath, destPath, { recursive: true });
+  }
+
   if (existsSync(join(dest, "index.html"))) {
     console.log("✓ Copied developer docs to dist/developers");
   } else {
