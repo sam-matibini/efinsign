@@ -4,6 +4,9 @@ node_modules
 dist
 *.log
 
+# Documentation — allow pre-built docs output
+!developers-portal/.vitepress/dist
+
 # Documentation
 *.md
 
