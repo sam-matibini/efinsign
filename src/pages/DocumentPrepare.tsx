@@ -180,7 +180,8 @@ export default function DocumentPrepare() {
   };
 
   const deleteSavedSig = async (sigId: string) => {
-    await supabase.from("saved_signatures" as any).delete().eq("id", sigId);
+    if (!user) return;
+    await supabase.from("saved_signatures" as any).delete().eq("id", sigId).eq("user_id", user.id);
     setDbSignatures((prev) => prev.filter((s) => s.id !== sigId));
     setDbInitials((prev) => prev.filter((s) => s.id !== sigId));
   };
