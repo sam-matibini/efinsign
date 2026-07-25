@@ -1,1 +1,9 @@
 project_id = "cavdivfhszrnhliyafze"
+
+# The developer API authenticates with custom `efsk_` API keys (see _shared/auth.ts),
+# NOT Supabase JWTs. JWT verification must stay OFF at the gateway, otherwise every
+# API-key request is rejected with UNAUTHORIZED_INVALID_JWT_FORMAT before our code runs.
+# Pinning it here prevents a plain `supabase functions deploy api` from silently
+# reverting to the verify_jwt = true default.
+[functions.api]
+verify_jwt = false

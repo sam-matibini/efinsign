@@ -12,35 +12,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
+    const authHeader = req.headers.get("Authorization");
+
+    // The developer API invokes this function internally and proves it's a trusted
+    // caller with a shared-secret header (the service-role key, which is never public).
+    // This is checked independently of the bearer token because supabase.functions
+    // .invoke() does not reliably forward the service-role key as the Authorization
+    // bearer — so trusting the bearer alone would 401 API-triggered sends.
+    const internalSecret = req.headers.get("x-internal-secret");
+    const isServiceRole = !!internalSecret && internalSecret === serviceRoleKey;
+
     // Verify caller
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: authHeader ?? "" } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let userId: string | undefined;
+    if (!isServiceRole) {
+      // External (web-app) caller: require a valid user JWT and validate it.
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = claimsData.claims.sub;
     }
-    const userId = claimsData.claims.sub;
 
-    const { document_id, signer_id } = await req.json();
+    const { document_id, signer_id, reminder } = await req.json();
+    const isReminder = reminder === true;
     if (!document_id) {
       return new Response(JSON.stringify({ error: "document_id required" }), {
         status: 400,
@@ -48,8 +61,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Use the service-role client for data access. The caller is already authorized
+    // above (internal service-role secret, or a validated user JWT whose ownership is
+    // re-checked below). An RLS-scoped anon read returns nothing for internal calls
+    // and produces a false "Document not found".
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
     // Fetch document & verify ownership
-    const { data: doc, error: docError } = await supabase
+    const { data: doc, error: docError } = await adminClient
       .from("documents")
       .select("*")
       .eq("id", document_id)
@@ -61,15 +80,14 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (doc.owner_id !== userId) {
+    if (!isServiceRole && doc.owner_id !== userId) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Use service role to read signers (includes access_token)
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    // Read signers (includes access_token) with the same service-role client
     let { data: signers, error: signersError } = await adminClient
       .from("document_signers")
       .select("*")
@@ -115,15 +133,25 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: "eFinSign <info@efinsuite.com>",
           to: [signer.email],
-          subject: `You've been invited to sign: ${doc.title}`,
+          subject: isReminder
+            ? `Reminder: please sign ${doc.title}`
+            : `You've been invited to sign: ${doc.title}`,
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-              <h2 style="color: #1a1a1a;">You've been invited to sign a document</h2>
+              <h2 style="color: #1a1a1a;">${
+                isReminder
+                  ? "Reminder: a document is waiting for your signature"
+                  : "You've been invited to sign a document"
+              }</h2>
               <p style="color: #444; font-size: 16px;">
                 Hi ${signer.name},
               </p>
               <p style="color: #444; font-size: 16px;">
-                You've been invited to sign <strong>${doc.title}</strong>.
+                ${
+                  isReminder
+                    ? `This is a friendly reminder to sign <strong>${doc.title}</strong>.`
+                    : `You've been invited to sign <strong>${doc.title}</strong>.`
+                }
               </p>
               <a href="${signingLink}" 
                  style="display: inline-block; background-color: #3B82F6; color: white; padding: 12px 24px; 
