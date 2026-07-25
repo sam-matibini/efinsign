@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
             "X-Efinsign-Signature": `t=${timestamp},v1=${signature}`,
             "X-Efinsign-Event": delivery.event_type,
+            "X-Efinsign-Delivery-Id": delivery.id,
             "User-Agent": "eFinSign-Webhook/1.0",
           },
           body: payloadStr,

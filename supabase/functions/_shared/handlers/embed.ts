@@ -40,8 +40,8 @@ export async function getSigningUrl(req: Request, _params: Record<string, string
     return new Response(JSON.stringify({
       data: {
         url,
-        signing_url: `${Deno.env.get("SITE_URL") || supabaseUrl}/sign?token=${signer.access_token}`,
-        embed_url: `${Deno.env.get("SITE_URL") || supabaseUrl}/embed/sign?token=${signer.access_token}`,
+        signing_url: `${Deno.env.get("SITE_URL") || "https://www.efinsign.ca"}/sign?token=${signer.access_token}`,
+        embed_url: `${Deno.env.get("SITE_URL") || "https://www.efinsign.ca"}/embed/sign?token=${signer.access_token}`,
         signer_email: signer.email,
         signer_name: signer.name,
       },
@@ -76,8 +76,8 @@ export async function getSigningUrl(req: Request, _params: Record<string, string
     return new Response(JSON.stringify({
       data: {
         url,
-        signing_url: `${Deno.env.get("SITE_URL") || supabaseUrl}/sign?token=${signer.access_token}`,
-        embed_url: `${Deno.env.get("SITE_URL") || supabaseUrl}/embed/sign?token=${signer.access_token}`,
+        signing_url: `${Deno.env.get("SITE_URL") || "https://www.efinsign.ca"}/sign?token=${signer.access_token}`,
+        embed_url: `${Deno.env.get("SITE_URL") || "https://www.efinsign.ca"}/embed/sign?token=${signer.access_token}`,
         signer_email: signer.email,
         signer_name: signer.name,
       },

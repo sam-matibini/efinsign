@@ -7,3 +7,11 @@ project_id = "cavdivfhszrnhliyafze"
 # reverting to the verify_jwt = true default.
 [functions.api]
 verify_jwt = false
+
+# dispatch-webhooks is an internal queue processor (it only reads its own delivery
+# queue and POSTs to org-registered webhook URLs — it returns no data to the caller).
+# The pg_cron flush job calls it via pg_net with no auth, so JWT verification must be
+# off at the gateway. Without this, the cron POST is rejected before the code runs and
+# queued webhooks (e.g. document.completed on signing) are never delivered.
+[functions.dispatch-webhooks]
+verify_jwt = false
