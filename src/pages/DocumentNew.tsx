@@ -89,7 +89,11 @@ export default function DocumentNew() {
 
     setUploading(true);
     try {
-      const filePath = `${currentOrg?.id || user.id}/${user.id}/${Date.now()}-${file.name}`;
+      const safeName = file.name
+        .replace(/[^\w\s.()\[\]-]/g, "-")  // replace special chars (em dashes, etc.) with hyphens
+        .replace(/\s+/g, "_")              // replace spaces with underscores
+        .replace(/-{2,}/g, "-");           // collapse consecutive hyphens
+      const filePath = `${currentOrg?.id || user.id}/${user.id}/${Date.now()}-${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from("documents")
         .upload(filePath, file);

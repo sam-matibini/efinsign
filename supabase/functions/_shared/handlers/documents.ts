@@ -44,7 +44,11 @@ export async function createDocument(req: Request, _params: Record<string, strin
 
   const supabase = getSupabase();
 
-  const filePath = `${ctx.organization_id}/${Date.now()}_${file.name || "document.pdf"}`;
+  const safeDocName = (file.name || "document.pdf")
+    .replace(/[^\w\s.()\[\]-]/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/-{2,}/g, "-");
+  const filePath = `${ctx.organization_id}/${Date.now()}_${safeDocName}`;
   const fileBuffer = new Uint8Array(await file.arrayBuffer());
 
   const { error: uploadErr } = await supabase.storage
