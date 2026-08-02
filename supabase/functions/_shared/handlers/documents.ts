@@ -44,7 +44,11 @@ export async function createDocument(req: Request, _params: Record<string, strin
 
   const supabase = getSupabase();
 
-  const filePath = `${ctx.organization_id}/${Date.now()}_${file.name || "document.pdf"}`;
+  const safeDocName = (file.name || "document.pdf")
+    .replace(/[^\w\s.()\[\]-]/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/-{2,}/g, "-");
+  const filePath = `${ctx.organization_id}/${Date.now()}_${safeDocName}`;
   const fileBuffer = new Uint8Array(await file.arrayBuffer());
 
   const { error: uploadErr } = await supabase.storage
@@ -275,13 +279,10 @@ export async function sendDocument(_req: Request, params: Record<string, string>
 
   if (updateErr) return errorResponse(500, "send_failed", updateErr.message);
 
-  try {
-    await supabase.functions.invoke("send-signing-notifications", {
-      body: { document_id: params.id },
-    });
-  } catch {
-    // notification failure shouldn't block the send
-  }
+  // Send signer invitation emails. This must not silently swallow failures —
+  // a broken email path should be visible in the API response, not hidden
+  // behind a 200 with an empty catch.
+  const notifications = await invokeNotifications(supabase, { document_id: params.id });
 
   try {
     await supabase.functions.invoke("dispatch-webhooks", { body: {} });
@@ -296,11 +297,66 @@ export async function sendDocument(_req: Request, params: Record<string, string>
     .single();
 
   return new Response(JSON.stringify({
-    data: refreshed,
+    data: { ...refreshed, notifications },
   }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+interface NotificationSummary {
+  sent: number;
+  failed: number;
+  status: "sent" | "partial" | "failed";
+  error?: string;
+}
+
+// Invokes send-signing-notifications and normalizes the outcome into a summary
+// that can be surfaced to the API caller. Never throws.
+async function invokeNotifications(
+  supabase: ReturnType<typeof getSupabase>,
+  body: Record<string, unknown>,
+): Promise<NotificationSummary> {
+  try {
+    const { data, error } = await supabase.functions.invoke("send-signing-notifications", {
+      body,
+      // Prove this is a trusted internal call. send-signing-notifications is JWT-gated
+      // for web-app users; the service-role key here lets it skip that per-user check.
+      headers: { "x-internal-secret": Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! },
+    });
+
+    if (error) {
+      // Try to surface the underlying function error body (Resend error, 403, etc.)
+      let detail = error.message;
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.text === "function") {
+          const text = await ctx.text();
+          if (text) detail = text;
+        }
+      } catch {
+        // fall back to error.message
+      }
+      return { sent: 0, failed: 0, status: "failed", error: detail };
+    }
+
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const sent = results.filter((r: { success: boolean }) => r.success).length;
+    const failed = results.filter((r: { success: boolean }) => !r.success).length;
+    const firstError = results.find((r: { success: boolean; error?: string }) => !r.success)?.error;
+
+    const status: NotificationSummary["status"] =
+      failed === 0 && sent > 0 ? "sent" : sent > 0 ? "partial" : "failed";
+
+    return { sent, failed, status, ...(firstError ? { error: firstError } : {}) };
+  } catch (err) {
+    return {
+      sent: 0,
+      failed: 0,
+      status: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export async function voidDocument(_req: Request, params: Record<string, string>, ctx: { organization_id: string }) {
@@ -348,16 +404,17 @@ export async function remindDocument(_req: Request, params: Record<string, strin
   if (!doc) return errorResponse(404, "not_found", "Document not found");
   if (doc.status !== "pending") return errorResponse(400, "invalid_status", "Only pending documents can receive reminders");
 
-  try {
-    await supabase.functions.invoke("send-signing-notifications", {
-      body: { document_id: params.id, reminder: true },
-    });
-  } catch {
-    // non-blocking
+  const notifications = await invokeNotifications(supabase, {
+    document_id: params.id,
+    reminder: true,
+  });
+
+  if (notifications.status === "failed") {
+    return errorResponse(502, "reminder_failed", notifications.error || "Failed to send reminder emails");
   }
 
   return new Response(JSON.stringify({
-    data: { success: true, message: "Reminder sent" },
+    data: { success: true, message: "Reminder sent", notifications },
   }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },

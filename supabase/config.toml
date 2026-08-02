@@ -1,1 +1,17 @@
 project_id = "cavdivfhszrnhliyafze"
+
+# The developer API authenticates with custom `efsk_` API keys (see _shared/auth.ts),
+# NOT Supabase JWTs. JWT verification must stay OFF at the gateway, otherwise every
+# API-key request is rejected with UNAUTHORIZED_INVALID_JWT_FORMAT before our code runs.
+# Pinning it here prevents a plain `supabase functions deploy api` from silently
+# reverting to the verify_jwt = true default.
+[functions.api]
+verify_jwt = false
+
+# dispatch-webhooks is an internal queue processor (it only reads its own delivery
+# queue and POSTs to org-registered webhook URLs — it returns no data to the caller).
+# The pg_cron flush job calls it via pg_net with no auth, so JWT verification must be
+# off at the gateway. Without this, the cron POST is rejected before the code runs and
+# queued webhooks (e.g. document.completed on signing) are never delivered.
+[functions.dispatch-webhooks]
+verify_jwt = false

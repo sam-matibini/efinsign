@@ -21,7 +21,11 @@ export async function createTemplate(req: Request, _params: Record<string, strin
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     if (file) {
-      filePath = `${ctx.organization_id}/templates/${Date.now()}_${file.name || "template.pdf"}`;
+      const safeTplName = (file.name || "template.pdf")
+        .replace(/[^\w\s.()\[\]-]/g, "-")
+        .replace(/\s+/g, "_")
+        .replace(/-{2,}/g, "-");
+      filePath = `${ctx.organization_id}/templates/${Date.now()}_${safeTplName}`;
       const fileBuffer = new Uint8Array(await file.arrayBuffer());
       const { error: uploadErr } = await supabase.storage
         .from("documents")

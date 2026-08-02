@@ -10,9 +10,9 @@ function getSupabase() {
 }
 
 function generateToken(): string {
-  // const bytes = new Uint8Array(32);
-  // crypto.getRandomValues(bytes);
-  // return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  // Must be a valid UUID: document_signers.access_token is a `uuid` column and is
+  // compared against signer_token() (also uuid) in RLS policies. A raw hex string
+  // fails to insert with "invalid input syntax for type uuid".
   return crypto.randomUUID();
 }
 
