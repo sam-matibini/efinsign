@@ -6,9 +6,9 @@ import StampPicker from "@/components/StampPicker";
 import {
   ArrowLeft, Type, Paintbrush, Stamp, Save, Loader2, MousePointer,
   Check, Highlighter, Shapes, ImageIcon, Square, Circle, Minus,
-  Undo2, Redo2
+  Undo2, Redo2, Eraser, Droplets, PanelTop, Bold
 } from "lucide-react";
-import type { ToolMode, ShapeType } from "./types";
+import type { EditorFont, ToolMode, ShapeType } from "./types";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -23,6 +23,12 @@ interface PdfEditorToolbarProps {
   setTool: (t: ToolMode) => void;
   fontSize: number;
   setFontSize: (s: number) => void;
+  textColor: string;
+  setTextColor: (c: string) => void;
+  textFont: EditorFont;
+  setTextFont: (f: EditorFont) => void;
+  textBold: boolean;
+  setTextBold: (b: boolean) => void;
   drawColor: string;
   setDrawColor: (c: string) => void;
   strokeWidth: number;
@@ -51,11 +57,14 @@ interface PdfEditorToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onOpenWatermark: () => void;
+  onOpenHeaderFooter: () => void;
 }
 
 export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
   const {
     docTitle, tool, setTool, fontSize, setFontSize,
+    textColor, setTextColor, textFont, setTextFont, textBold, setTextBold,
     drawColor, setDrawColor, strokeWidth, setStrokeWidth,
     selectedStamp, setSelectedStamp, checkmarkSize, setCheckmarkSize,
     highlightColor, setHighlightColor, highlightOpacity, setHighlightOpacity,
@@ -63,11 +72,13 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     shapeFillColor, setShapeFillColor, shapeStrokeWidth, setShapeStrokeWidth,
     onImageUpload, saving, onSave, onBack,
     onUndo, onRedo, canUndo, canRedo,
+    onOpenWatermark, onOpenHeaderFooter,
   } = props;
 
   const tools: { mode: ToolMode; icon: any; label: string }[] = [
     { mode: "select", icon: MousePointer, label: "Select" },
     { mode: "text", icon: Type, label: "Text" },
+    { mode: "whiteout", icon: Eraser, label: "Cover" },
     { mode: "draw", icon: Paintbrush, label: "Draw" },
     { mode: "stamp", icon: Stamp, label: "Stamp" },
     { mode: "checkmark", icon: Check, label: "Check" },
@@ -120,8 +131,41 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
               ))}
             </SelectContent>
           </Select>
+          <Select value={textFont} onValueChange={(v) => setTextFont(v as EditorFont)}>
+            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="helvetica">Helvetica</SelectItem>
+              <SelectItem value="times">Times</SelectItem>
+              <SelectItem value="courier">Courier</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant={textBold ? "default" : "ghost"}
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setTextBold(!textBold)}
+            title="Bold"
+          >
+            <Bold className="h-3.5 w-3.5" />
+          </Button>
+          <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" title="Text color" />
+          <span className="text-[10px] text-muted-foreground max-w-40 leading-tight">Wraps inside the box. Double-click to edit.</span>
         </div>
       )}
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-1 text-xs">More</Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-52 p-2 space-y-1">
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-xs" onClick={onOpenWatermark}>
+            <Droplets className="h-3.5 w-3.5" /> Watermark
+          </Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-xs" onClick={onOpenHeaderFooter}>
+            <PanelTop className="h-3.5 w-3.5" /> Header & footer
+          </Button>
+        </PopoverContent>
+      </Popover>
 
       {/* Draw options */}
       {tool === "draw" && (

@@ -42,6 +42,11 @@ interface FillSignSidebarProps {
   onDeleteSavedSig: (id: string) => void;
   // Text field callback
   onTextFieldRequest: () => void;
+  /** Opens the placement dialog for Full Name or Title, prefilled from the account. */
+  onIdentityField?: (type: "full_name" | "title") => void;
+  accountFullName?: string;
+  accountTitle?: string;
+  accountDate?: string;
 }
 
 export default function FillSignSidebar({
@@ -62,6 +67,10 @@ export default function FillSignSidebar({
   onPersistInitials,
   onDeleteSavedSig,
   onTextFieldRequest,
+  onIdentityField,
+  accountFullName,
+  accountTitle,
+  accountDate,
 }: FillSignSidebarProps) {
   const [captureMode, setCaptureMode] = useState<"signature" | "initials" | null>(null);
   const [pickerMode, setPickerMode] = useState<"signature" | "initials" | null>(null);
@@ -84,7 +93,12 @@ export default function FillSignSidebar({
       }
       return;
     }
-    if (type === "text" || type === "full_name" || type === "title") {
+    if (type === "full_name" || type === "title") {
+      if (onIdentityField) onIdentityField(type);
+      else onTextFieldRequest();
+      return;
+    }
+    if (type === "text") {
       onTextFieldRequest();
       return;
     }
@@ -131,8 +145,17 @@ export default function FillSignSidebar({
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Field type toolbar */}
+          {(accountFullName || accountTitle || accountDate) && (
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 space-y-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Your details</p>
+              <p className="text-xs"><span className="text-muted-foreground">Name: </span>{accountFullName || "Set your name in Settings"}</p>
+              <p className="text-xs"><span className="text-muted-foreground">Title: </span>{accountTitle || "Set your title in Settings"}</p>
+              <p className="text-xs"><span className="text-muted-foreground">Date: </span>{accountDate}</p>
+              <p className="text-[10px] text-muted-foreground">Full Name, Title, Date, and Signature use these when you place them.</p>
+            </div>
+          )}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Drag onto the PDF or click to place</p>
+            <p className="text-xs text-muted-foreground mb-2">Drag onto the PDF or click to place. Text wraps inside the field.</p>
             <div className="grid grid-cols-2 gap-2">
               {SELF_SIGN_FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                 <Button

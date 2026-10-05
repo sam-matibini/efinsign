@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation } from "./types";
+import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
+import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
 type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
@@ -13,8 +14,24 @@ const CURSOR_MAP: Record<ResizeDir, string> = {
   n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
 };
 
-function hasSize(ann: Annotation): ann is HighlightAnnotation | ShapeAnnotation | ImageAnnotation {
-  return ann.type === "highlight" || ann.type === "shape" || ann.type === "image";
+function textBox(ann: TextAnnotation) {
+  const width = ann.width && ann.width > 0 ? ann.width : DEFAULT_TEXT_BOX_WIDTH;
+  const height = ann.height && ann.height > 0 ? ann.height : estimateWrappedHeight(ann.text, ann.fontSize, width);
+  return { width, height };
+}
+
+function boxSize(ann: Annotation): { width: number; height: number } | null {
+  if (ann.type === "text") return textBox(ann);
+  if (ann.type === "highlight" || ann.type === "shape" || ann.type === "image" || ann.type === "whiteout") {
+    return { width: ann.width, height: ann.height };
+  }
+  return null;
+}
+
+function editorFontFamily(family: EditorFont | undefined) {
+  if (family === "times") return "Times New Roman, Times, serif";
+  if (family === "courier") return "Courier New, Courier, monospace";
+  return "Helvetica, Arial, sans-serif";
 }
 
 interface AnnotationOverlayProps {
@@ -25,10 +42,11 @@ interface AnnotationOverlayProps {
   onSelect: (id: string | null) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Annotation>) => void;
+  onEditText?: (ann: TextAnnotation) => void;
 }
 
 export default function AnnotationOverlay({
-  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate,
+  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText,
 }: AnnotationOverlayProps) {
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing");
   const isSelectMode = tool === "select";
@@ -51,12 +69,13 @@ export default function AnnotationOverlay({
   }, [isSelectMode, onSelect]);
 
   const handleResizeDown = useCallback((e: React.MouseEvent, ann: Annotation, dir: ResizeDir) => {
-    if (!isSelectMode || !hasSize(ann)) return;
+    const box = boxSize(ann);
+    if (!isSelectMode || !box || !("x" in ann)) return;
     e.stopPropagation();
     e.preventDefault();
     resizeRef.current = {
       id: ann.id, dir, startX: e.clientX, startY: e.clientY,
-      origX: ann.x, origY: ann.y, origW: ann.width, origH: ann.height,
+      origX: ann.x, origY: ann.y, origW: box.width, origH: box.height,
     };
     setResizing(true);
   }, [isSelectMode]);
@@ -91,8 +110,9 @@ export default function AnnotationOverlay({
   }, []);
 
   const renderResizeHandles = (ann: Annotation) => {
-    if (!hasSize(ann)) return null;
-    const { width: w, height: h } = ann;
+    const box = boxSize(ann);
+    if (!box) return null;
+    const { width: w, height: h } = box;
     const half = HANDLE_SIZE / 2;
     const positions: { dir: ResizeDir; left: number; top: number }[] = [
       { dir: "nw", left: -half, top: -half },
@@ -128,10 +148,13 @@ export default function AnnotationOverlay({
     >
       {pageAnnotations.map((ann) => {
         const isSelected = selectedId === ann.id;
+        const box = boxSize(ann);
         const common = {
           position: "absolute" as const,
           left: "x" in ann ? ann.x : 0,
           top: "y" in ann ? ann.y : 0,
+          width: box?.width,
+          height: box?.height,
           pointerEvents: isSelectMode ? "auto" as const : "none" as const,
           cursor: isSelectMode ? "move" : "default",
           outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
@@ -139,7 +162,18 @@ export default function AnnotationOverlay({
         };
 
         return (
-          <div key={ann.id} style={common} onMouseDown={(e) => handleMouseDown(e, ann)} onClick={(e) => e.stopPropagation()}>
+          <div
+            key={ann.id}
+            style={common}
+            onMouseDown={(e) => handleMouseDown(e, ann)}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              if (ann.type === "text" && onEditText) {
+                e.stopPropagation();
+                onEditText(ann);
+              }
+            }}
+          >
             {/* Delete toolbar */}
             {isSelected && (
               <div className="absolute -top-8 left-0 flex gap-1 z-20">
@@ -157,9 +191,31 @@ export default function AnnotationOverlay({
 
             {/* Render by type */}
             {ann.type === "text" && (
-              <span style={{ fontSize: (ann as TextAnnotation).fontSize }} className="text-foreground whitespace-nowrap select-none">
+              <div
+                className="select-none overflow-hidden"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  fontSize: (ann as TextAnnotation).fontSize,
+                  color: (ann as TextAnnotation).color || "#111827",
+                  fontWeight: (ann as TextAnnotation).bold ? 700 : 400,
+                  fontFamily: editorFontFamily((ann as TextAnnotation).fontFamily),
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  lineHeight: 1.35,
+                  opacity: (ann as TextAnnotation).opacity ?? 1,
+                  transform: (ann as TextAnnotation).rotate ? `rotate(${(ann as TextAnnotation).rotate}deg)` : undefined,
+                  transformOrigin: "left top",
+                }}
+              >
                 {(ann as TextAnnotation).text}
-              </span>
+              </div>
+            )}
+            {ann.type === "whiteout" && (
+              <div
+                className="bg-white border border-dashed border-slate-300"
+                style={{ width: (ann as WhiteoutAnnotation).width, height: (ann as WhiteoutAnnotation).height }}
+              />
             )}
             {ann.type === "stamp" && (
               <span className="font-bold text-3xl text-destructive/40 uppercase select-none" style={{ transform: "rotate(-30deg)", display: "inline-block" }}>

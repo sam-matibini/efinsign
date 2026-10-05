@@ -6,7 +6,7 @@ import PdfViewer from "@/components/PdfViewer";
 import SignatureCapture from "@/components/SignatureCapture";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -148,7 +148,13 @@ export default function Sign() {
         }
       }
     }
-    setFields((fieldsRes.data || []).map(f => ({ ...f, localValue: f.value || undefined })));
+    setFields((fieldsRes.data || []).map(f => {
+      let localValue = f.value || undefined;
+      if (!localValue && f.field_type === "full_name" && signerData.name) {
+        localValue = signerData.name;
+      }
+      return { ...f, localValue };
+    }));
     setLoading(false);
   }, [token]);
 
@@ -216,10 +222,12 @@ export default function Sign() {
       // Auto-advance after toggle
       setTimeout(() => advanceToNextUnfilled(field.id), 300);
     } else {
-      setTextInputValue(field.localValue || "");
+      const preset = field.localValue
+        || (type === "full_name" ? signer?.name || "" : "");
+      setTextInputValue(preset);
       setTextDialogOpen(true);
     }
-  }, [updateFieldValue, advanceToNextUnfilled]);
+  }, [updateFieldValue, advanceToNextUnfilled, signer]);
 
   const handleSignatureSave = useCallback((imageData: string) => {
     if (activeField) {
@@ -434,8 +442,8 @@ export default function Sign() {
                     <Check className="h-5 w-5 text-green-600" />
                   </div>
                 ) : (
-                  <div className="w-full h-full flex items-center px-1 overflow-hidden">
-                    <span className="text-xs text-foreground truncate">{field.localValue}</span>
+                  <div className="w-full h-full flex items-start px-1 overflow-hidden">
+                    <span className="text-xs text-foreground whitespace-pre-wrap break-words leading-tight">{field.localValue}</span>
                   </div>
                 )
               ) : (
@@ -879,12 +887,14 @@ export default function Sign() {
             <DialogTitle>Enter {getFieldLabel(activeField?.field_type)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Input
+            <Textarea
               autoFocus
+              rows={3}
               placeholder={getFieldPlaceholder(activeField?.field_type)}
               value={textInputValue}
               onChange={e => setTextInputValue(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleTextSave(); }}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTextSave(); } }}
+              className="whitespace-pre-wrap break-words"
             />
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setTextDialogOpen(false); setActiveField(null); }}>Cancel</Button>

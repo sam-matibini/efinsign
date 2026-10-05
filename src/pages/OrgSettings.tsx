@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy } from "lucide-react";
+import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,6 +80,7 @@ export default function OrgSettings() {
   const { currentOrg, role } = useOrganization();
   const { user } = useAuth();
   const [fullName, setFullName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [orgAddress, setOrgAddress] = useState("");
@@ -149,13 +151,21 @@ export default function OrgSettings() {
     if (!user) return;
     supabase.from("profiles").select("full_name").eq("user_id", user.id).single()
       .then(({ data }) => { if (data?.full_name) setFullName(data.full_name); });
+    setJobTitle(readAccountTitle(user.id, (user.user_metadata as { job_title?: string } | undefined)?.job_title));
   }, [user]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
     setSavingProfile(true);
     const { error } = await supabase.from("profiles").update({ full_name: fullName }).eq("user_id", user.id);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      setSavingProfile(false);
+      return;
+    }
+    writeAccountTitle(user.id, jobTitle.trim());
+    const { error: metaError } = await supabase.auth.updateUser({ data: { job_title: jobTitle.trim() } });
+    if (metaError) toast.success("Profile saved on this device. Title could not sync to your account yet.");
     else toast.success("Profile updated");
     setSavingProfile(false);
   };
@@ -532,6 +542,11 @@ export default function OrgSettings() {
           <div className="space-y-2">
             <Label>Full Name</Label>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Title</Label>
+            <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Partner" />
+            <p className="text-xs text-muted-foreground">Used to prefill Title fields when you fill and sign.</p>
           </div>
           <Button onClick={handleSaveProfile} disabled={savingProfile}>
             {savingProfile ? "Saving..." : "Save Profile"}

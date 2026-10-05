@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { wrapTextToWidth } from "@/lib/textWrap";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -185,12 +186,29 @@ export async function generateSignedPdf(
       field.field_type === "title"
     ) {
       if (!field.value) continue;
-      page.drawText(field.value, {
-        x: pdfX,
-        y: pdfY + pdfH * 0.3,
-        size: Math.min(pdfH * 0.6, 14),
-        color: rgb(0, 0, 0),
-      });
+      const size = Math.min(Math.max(8, pdfH * 0.45), 12);
+      const maxW = Math.max(8, pdfW - 2);
+      const lines = wrapTextToWidth(field.value, maxW, (sample) => font.widthOfTextAtSize(sample, size));
+      const lineHeight = size * 1.2;
+      if (lines.length <= 1) {
+        const line = lines[0] || "";
+        if (line) {
+          page.drawText(line, {
+            x: pdfX + 1,
+            y: pdfY + Math.max(2, pdfH * 0.3),
+            size,
+            font,
+            color: rgb(0, 0, 0),
+          });
+        }
+      } else {
+        lines.forEach((line, i) => {
+          if (!line) return;
+          const y = pdfY + pdfH - size - 1 - i * lineHeight;
+          if (y < pdfY - 2) return;
+          page.drawText(line, { x: pdfX + 1, y, size, font, color: rgb(0, 0, 0) });
+        });
+      }
     } else if (field.field_type === "checkbox" || field.field_type === "checkmark") {
       if (field.value === "true" || field.value === "checked" || field.value === "✓" || field.value === "checkmark") {
         const s = Math.min(pdfH * 0.8, 16);

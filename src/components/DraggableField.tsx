@@ -138,7 +138,7 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
 
   return (
     <div
-      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-80 cursor-move"}`}
+      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none overflow-hidden ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-80 cursor-move"}`}
       style={{
         left: x,
         top: y,
@@ -155,7 +155,7 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
       {(fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image") ? (
         <img src={value} alt={fieldType} className="w-full h-full object-contain pointer-events-none" draggable={false} />
       ) : value ? (
-        <span className="truncate px-1">{value}</span>
+        <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left">{value}</span>
       ) : (
         label
       )}

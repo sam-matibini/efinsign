@@ -1,6 +1,8 @@
-export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image";
+export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image" | "whiteout";
 
 export type ShapeType = "rect" | "circle" | "line";
+
+export type EditorFont = "helvetica" | "times" | "courier";
 
 interface BaseAnnotation {
   id: string;
@@ -13,6 +15,14 @@ export interface TextAnnotation extends BaseAnnotation {
   type: "text";
   text: string;
   fontSize: number;
+  /** Box width in canvas pixels. Text wraps inside it so it does not run over nearby content. */
+  width?: number;
+  height?: number;
+  color?: string;
+  fontFamily?: EditorFont;
+  bold?: boolean;
+  opacity?: number;
+  rotate?: number;
 }
 
 export interface StampAnnotation extends BaseAnnotation {
@@ -57,6 +67,12 @@ export interface ImageAnnotation extends BaseAnnotation {
   imageData: string;
 }
 
+export interface WhiteoutAnnotation extends BaseAnnotation {
+  type: "whiteout";
+  width: number;
+  height: number;
+}
+
 export type Annotation =
   | TextAnnotation
   | StampAnnotation
@@ -64,7 +80,8 @@ export type Annotation =
   | CheckmarkAnnotation
   | HighlightAnnotation
   | ShapeAnnotation
-  | ImageAnnotation;
+  | ImageAnnotation
+  | WhiteoutAnnotation;
 
 export interface PageState {
   pageNum: number;

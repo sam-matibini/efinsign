@@ -3,6 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 import PdfAnnotationCanvas from "@/components/PdfAnnotationCanvas";
@@ -11,8 +14,9 @@ import PdfEditorToolbar from "@/components/pdf-editor/PdfEditorToolbar";
 import AnnotationOverlay from "@/components/pdf-editor/AnnotationOverlay";
 import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
-import type { Annotation, DrawingAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
+import type { Annotation, DrawingAnnotation, EditorFont, TextAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
+import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -95,6 +99,9 @@ export default function PdfEdit() {
   // Tool state
   const [tool, setTool] = useState<ToolMode>("select");
   const [fontSize, setFontSize] = useState(14);
+  const [textColor, setTextColor] = useState("#111827");
+  const [textFont, setTextFont] = useState<EditorFont>("helvetica");
+  const [textBold, setTextBold] = useState(false);
   const [drawColor, setDrawColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
@@ -108,8 +115,13 @@ export default function PdfEdit() {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [editingText, setEditingText] = useState<{ pageIndex: number; x: number; y: number } | null>(null);
+  const [editingText, setEditingText] = useState<{ pageIndex: number; x: number; y: number; id?: string; width?: number } | null>(null);
   const [textValue, setTextValue] = useState("");
+  const [watermarkOpen, setWatermarkOpen] = useState(false);
+  const [watermarkText, setWatermarkText] = useState("DRAFT");
+  const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
+  const [headerText, setHeaderText] = useState("");
+  const [footerText, setFooterText] = useState("");
 
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -209,15 +221,99 @@ export default function PdfEdit() {
     [tool, selectedStamp, checkmarkSize, pendingImage, pages, setAnnotations]
   );
 
+  const textCommitRef = useRef(false);
   const confirmText = useCallback(() => {
+    if (textCommitRef.current) return;
     if (!editingText || !textValue.trim()) { setEditingText(null); return; }
-    setAnnotations((prev) => [
-      ...prev,
-      { type: "text", id: genId(), pageIndex: editingText.pageIndex, x: editingText.x, y: editingText.y, text: textValue.trim(), fontSize },
-    ]);
+    textCommitRef.current = true;
+    setTimeout(() => { textCommitRef.current = false; }, 0);
+    const width = editingText.width || DEFAULT_TEXT_BOX_WIDTH;
+    const height = estimateWrappedHeight(textValue.trim(), fontSize, width);
+    const next: TextAnnotation = {
+      type: "text",
+      id: editingText.id || genId(),
+      pageIndex: editingText.pageIndex,
+      x: editingText.x,
+      y: editingText.y,
+      text: textValue.trim(),
+      fontSize,
+      width,
+      height,
+      color: textColor,
+      fontFamily: textFont,
+      bold: textBold,
+    };
+    setAnnotations((prev) => editingText.id
+      ? prev.map((a) => a.id === editingText.id ? { ...a, ...next } : a)
+      : [...prev, next]);
     setEditingText(null);
     setTextValue("");
-  }, [editingText, textValue, fontSize, setAnnotations]);
+  }, [editingText, textValue, fontSize, textColor, textFont, textBold, setAnnotations]);
+
+  const handleEditText = useCallback((ann: TextAnnotation) => {
+    setTool("select");
+    setFontSize(ann.fontSize);
+    if (ann.color) setTextColor(ann.color);
+    if (ann.fontFamily) setTextFont(ann.fontFamily);
+    setTextBold(!!ann.bold);
+    setTextValue(ann.text);
+    setEditingText({ pageIndex: ann.pageIndex, x: ann.x, y: ann.y, id: ann.id, width: ann.width });
+  }, []);
+
+  const applyWatermark = useCallback(() => {
+    const label = watermarkText.trim();
+    if (!label) { toast.error("Enter watermark text"); return; }
+    const additions: TextAnnotation[] = pages
+      .map((page, index) => page.deleted ? null : ({
+        type: "text" as const,
+        id: genId(),
+        pageIndex: index,
+        x: 140,
+        y: 420,
+        text: label,
+        fontSize: 48,
+        width: 460,
+        height: 72,
+        color: "#94a3b8",
+        fontFamily: "helvetica" as const,
+        bold: true,
+        opacity: 0.28,
+        rotate: -28,
+      }))
+      .filter((a): a is TextAnnotation => a !== null);
+    setAnnotations((prev) => [...prev, ...additions]);
+    setWatermarkOpen(false);
+    toast.success("Watermark added. Drag it if you want it somewhere else.");
+  }, [watermarkText, pages, setAnnotations]);
+
+  const applyHeaderFooter = useCallback(() => {
+    if (!headerText.trim() && !footerText.trim()) { toast.error("Enter a header or a footer"); return; }
+    const additions: TextAnnotation[] = [];
+    pages.forEach((page, index) => {
+      if (page.deleted) return;
+      const canvas = canvasRefs.current.get(page.pageNum);
+      const pageWidth = canvas?.width || 900;
+      const pageHeight = canvas?.height || 1200;
+      const width = Math.max(160, pageWidth - 72);
+      if (headerText.trim()) {
+        additions.push({
+          type: "text", id: genId(), pageIndex: index, x: 36, y: 16,
+          text: headerText.trim(), fontSize: 11, width, height: 22,
+          color: "#334155", fontFamily: textFont, bold: textBold,
+        });
+      }
+      if (footerText.trim()) {
+        additions.push({
+          type: "text", id: genId(), pageIndex: index, x: 36, y: Math.max(16, pageHeight - 32),
+          text: footerText.trim(), fontSize: 11, width, height: 22,
+          color: "#334155", fontFamily: textFont, bold: textBold,
+        });
+      }
+    });
+    setAnnotations((prev) => [...prev, ...additions]);
+    setHeaderFooterOpen(false);
+    toast.success("Header and footer added to each page");
+  }, [headerText, footerText, pages, textFont, textBold, setAnnotations]);
 
   const handleDrawingComplete = useCallback((pageIndex: number, imageData: string) => {
     setAnnotations((prev) => {
@@ -232,6 +328,10 @@ export default function PdfEdit() {
       color: highlightColor, opacity: highlightOpacity,
     }]);
   }, [highlightColor, highlightOpacity, setAnnotations]);
+
+  const handleWhiteoutComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
+    setAnnotations((prev) => [...prev, { type: "whiteout", id: genId(), pageIndex, x, y, width: w, height: h }]);
+  }, [setAnnotations]);
 
   const handleShapeComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
     setAnnotations((prev) => [...prev, {
@@ -288,6 +388,9 @@ export default function PdfEdit() {
         docTitle={doc.title}
         tool={tool} setTool={setTool}
         fontSize={fontSize} setFontSize={setFontSize}
+        textColor={textColor} setTextColor={setTextColor}
+        textFont={textFont} setTextFont={setTextFont}
+        textBold={textBold} setTextBold={setTextBold}
         drawColor={drawColor} setDrawColor={setDrawColor}
         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
         selectedStamp={selectedStamp} setSelectedStamp={setSelectedStamp}
@@ -303,6 +406,8 @@ export default function PdfEdit() {
         onBack={() => navigate(`/documents/${id}`)}
         onUndo={undo} onRedo={redo}
         canUndo={canUndo} canRedo={canRedo}
+        onOpenWatermark={() => setWatermarkOpen(true)}
+        onOpenHeaderFooter={() => setHeaderFooterOpen(true)}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -354,6 +459,13 @@ export default function PdfEdit() {
                   />
 
                   <DragDrawCanvas
+                    active={tool === "whiteout" && activePageIndex === index}
+                    onComplete={(x, y, w, h) => handleWhiteoutComplete(index, x, y, w, h)}
+                    previewColor="#ffffff"
+                    previewOpacity={0.85}
+                  />
+
+                  <DragDrawCanvas
                     active={tool === "shape" && activePageIndex === index}
                     onComplete={(x, y, w, h) => handleShapeComplete(index, x, y, w, h)}
                     previewColor={shapeStrokeColor}
@@ -368,18 +480,36 @@ export default function PdfEdit() {
                     onSelect={setSelectedAnnotationId}
                     onDelete={handleDeleteAnnotation}
                     onUpdate={handleUpdateAnnotation}
+                    onEditText={handleEditText}
                   />
 
                   {editingText?.pageIndex === index && (
-                    <div className="absolute z-20" style={{ left: editingText.x, top: editingText.y }}>
-                      <Input
+                    <div
+                      className="absolute z-20"
+                      style={{ left: editingText.x, top: editingText.y }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <textarea
                         autoFocus
                         value={textValue}
                         onChange={(e) => setTextValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") confirmText(); if (e.key === "Escape") setEditingText(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmText(); }
+                          if (e.key === "Escape") setEditingText(null);
+                        }}
                         onBlur={confirmText}
-                        className="h-7 text-xs min-w-[120px] w-auto"
-                        style={{ fontSize }}
+                        rows={3}
+                        className="rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        style={{
+                          fontSize,
+                          width: editingText.width || DEFAULT_TEXT_BOX_WIDTH,
+                          color: textColor,
+                          fontWeight: textBold ? 700 : 400,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          lineHeight: 1.35,
+                        }}
                       />
                     </div>
                   )}
@@ -389,6 +519,44 @@ export default function PdfEdit() {
           </div>
         </div>
       </div>
+
+      <Dialog open={watermarkOpen} onOpenChange={setWatermarkOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Watermark</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Text shown across every page</Label>
+            <Input value={watermarkText} onChange={(e) => setWatermarkText(e.target.value)} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWatermarkOpen(false)}>Cancel</Button>
+            <Button onClick={applyWatermark}>Add watermark</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={headerFooterOpen} onOpenChange={setHeaderFooterOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Header & footer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Header</Label>
+              <Input value={headerText} onChange={(e) => setHeaderText(e.target.value)} placeholder="Optional header" />
+            </div>
+            <div className="space-y-1">
+              <Label>Footer</Label>
+              <Input value={footerText} onChange={(e) => setFooterText(e.target.value)} placeholder="Optional footer" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHeaderFooterOpen(false)}>Cancel</Button>
+            <Button onClick={applyHeaderFooter}>Add to pages</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

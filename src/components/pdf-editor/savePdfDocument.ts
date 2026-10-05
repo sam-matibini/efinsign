@@ -1,5 +1,6 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation } from "./types";
+import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import { wrapTextToWidth } from "@/lib/textWrap";
+import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -19,6 +20,16 @@ export async function savePdfDocument(
   const newDoc = await PDFDocument.create();
   const font = await newDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await newDoc.embedFont(StandardFonts.HelveticaBold);
+  const times = await newDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await newDoc.embedFont(StandardFonts.TimesRomanBold);
+  const courier = await newDoc.embedFont(StandardFonts.Courier);
+  const courierBold = await newDoc.embedFont(StandardFonts.CourierBold);
+
+  const pickFont = (family: EditorFont | undefined, bold: boolean | undefined) => {
+    if (family === "times") return bold ? timesBold : times;
+    if (family === "courier") return bold ? courierBold : courier;
+    return bold ? boldFont : font;
+  };
 
   const activePages = pages.filter((p) => !p.deleted);
   for (const ps of activePages) {
@@ -46,7 +57,36 @@ export async function savePdfDocument(
     switch (ann.type) {
       case "text": {
         const ta = ann as TextAnnotation;
-        page.drawText(ta.text, { x: toPdfX(ta.x), y: toPdfY(ta.y), size: ta.fontSize, font, color: rgb(0, 0, 0) });
+        const size = ta.fontSize || 14;
+        const textFont = pickFont(ta.fontFamily, ta.bold);
+        const color = ta.color && /^#[0-9a-fA-F]{6}$/.test(ta.color) ? hexToRgb(ta.color) : rgb(0, 0, 0);
+        const maxW = ((ta.width && ta.width > 0 ? ta.width : 240) / cw) * pw;
+        const lines = wrapTextToWidth(ta.text, maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
+        const lineHeight = size * 1.25;
+        lines.forEach((line, i) => {
+          if (!line) return;
+          page.drawText(line, {
+            x: toPdfX(ta.x),
+            y: toPdfY(ta.y) - i * lineHeight,
+            size,
+            font: textFont,
+            color,
+            opacity: ta.opacity ?? 1,
+            ...(ta.rotate ? { rotate: degrees(ta.rotate) } : {}),
+          });
+        });
+        break;
+      }
+      case "whiteout": {
+        const wa = ann as WhiteoutAnnotation;
+        page.drawRectangle({
+          x: toPdfX(wa.x),
+          y: toPdfY(wa.y + wa.height),
+          width: (wa.width / cw) * pw,
+          height: (wa.height / ch) * ph,
+          color: rgb(1, 1, 1),
+          borderWidth: 0,
+        });
         break;
       }
       case "stamp": {

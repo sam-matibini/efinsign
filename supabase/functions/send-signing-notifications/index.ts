@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
       userId = claimsData.claims.sub;
     }
 
-    const { document_id, signer_id, reminder } = await req.json();
+    const { document_id, signer_id, reminder, message } = await req.json();
+    const personalMessage = typeof message === "string" ? message.trim().slice(0, 2000) : "";
     const isReminder = reminder === true;
     if (!document_id) {
       return new Response(JSON.stringify({ error: "document_id required" }), {
@@ -114,6 +115,15 @@ Deno.serve(async (req) => {
 
     const siteUrl = "https://www.efinsign.ca";
     const results: { email: string; success: boolean; error?: string }[] = [];
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const messageHtml = personalMessage
+      ? `<p style="color: #444; font-size: 16px;">${escapeHtml(personalMessage).replace(/\n/g, "<br/>")}</p>`
+      : "";
 
     for (let i = 0; i < signers.length; i++) {
       const signer = signers[i];
@@ -153,6 +163,8 @@ Deno.serve(async (req) => {
                     : `You've been invited to sign <strong>${doc.title}</strong>.`
                 }
               </p>
+              ${messageHtml}
+              ${signers.length > 1 ? `<p style="color: #666; font-size: 14px;">You are signer ${signer.signing_order || i + 1} of ${signers.length}.</p>` : ""}
               <a href="${signingLink}" 
                  style="display: inline-block; background-color: #3B82F6; color: white; padding: 12px 24px; 
                         text-decoration: none; border-radius: 6px; margin: 16px 0; font-weight: 500;">

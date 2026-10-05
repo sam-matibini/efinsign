@@ -6,24 +6,33 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const [fullName, setFullName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("full_name").eq("user_id", user.id).single()
       .then(({ data }) => { if (data?.full_name) setFullName(data.full_name); });
+    setJobTitle(readAccountTitle(user.id, (user.user_metadata as { job_title?: string } | undefined)?.job_title));
   }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
     setLoading(true);
     const { error } = await supabase.from("profiles").update({ full_name: fullName }).eq("user_id", user.id);
-    if (error) toast.error(error.message);
-    else toast.success("Profile updated");
+    if (error) {
+      toast.error(error.message);
+      setLoading(false);
+      return;
+    }
+    writeAccountTitle(user.id, jobTitle.trim());
+    await supabase.auth.updateUser({ data: { job_title: jobTitle.trim() } });
+    toast.success("Profile updated");
     setLoading(false);
   };
 
@@ -43,6 +52,10 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <Label>Full Name</Label>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Title</Label>
+            <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Partner" />
           </div>
           <Button onClick={handleSave} disabled={loading}>
             {loading ? "Saving..." : "Save Changes"}
