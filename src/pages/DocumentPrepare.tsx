@@ -18,6 +18,9 @@ import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables } from "@/integrations/supabase/types";
 import { accountFieldValue, buildAccountDetails, isAccountHolder, readAccountTitle, type AccountDetails } from "@/lib/accountProfile";
+import { stepFieldHeight } from "@/lib/fieldFont";
+import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
+import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
 
 type Signer = Tables<"document_signers">;
 type DocField = Tables<"document_fields">;
@@ -81,6 +84,8 @@ export default function DocumentPrepare() {
   const [accountDetails, setAccountDetails] = useState<AccountDetails>(() => buildAccountDetails({}));
   const [signingMessage, setSigningMessage] = useState("");
   const [expiresInDays, setExpiresInDays] = useState("none");
+  const [checkStyle, setCheckStyle] = useState<CheckStyle>("check");
+  const [pendingSeal, setPendingSeal] = useState<string | null>(null);
 
   // Save as template dialog
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -236,6 +241,19 @@ export default function DocumentPrepare() {
     return value ? { value } : {};
   }, [accountDetails, savedSignature, savedInitials, textValue, pendingFieldType, user]);
 
+  const placedExtras = useCallback((fieldType: string, self: boolean, signerEmail?: string | null, sealLabel?: string | null) => {
+    if (fieldType === "checkmark") return { value: self ? checkStyle : `style:${checkStyle}` };
+    if (fieldType === "seal") return { value: sealLabel || pendingSeal || "seal:efintax" };
+    return fieldValueFor(fieldType, signerEmail, self);
+  }, [checkStyle, pendingSeal, fieldValueFor]);
+
+  const dimsFor = (fieldType: string) => {
+    if (fieldType === "seal") return { w: 140, h: 140 };
+    if (fieldType === "checkmark") return { w: 36, h: 36 };
+    const known = FIELD_TYPES.find((f) => f.type === fieldType);
+    return known ? { w: known.w, h: known.h } : (SELF_SIGN_FIELD_DIMS[fieldType] || { w: 150, h: 30 });
+  };
+
 
   const addSigner = async (nameArg?: string, emailArg?: string) => {
     const name = (nameArg ?? newSignerName).trim();
@@ -314,7 +332,7 @@ export default function DocumentPrepare() {
       if (selfSignMode) {
         // Self-sign mode: use selfSigner
         if (!selfSigner) return;
-        const dims = SELF_SIGN_FIELD_DIMS[pendingFieldType] || { w: 150, h: 30 };
+        const dims = dimsFor(pendingFieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -326,8 +344,7 @@ export default function DocumentPrepare() {
             y,
             width: dims.w,
             height: dims.h,
-            // Auto-fill value for certain types
-            ...fieldValueFor(pendingFieldType, selfSigner.email, true),
+            ...placedExtras(pendingFieldType, true, selfSigner.email),
           })
           .select()
           .single();
@@ -336,8 +353,7 @@ export default function DocumentPrepare() {
       } else {
         // Prepare mode: use selectedSigner
         if (!selectedSigner) return;
-        const fieldDef = FIELD_TYPES.find((f) => f.type === pendingFieldType);
-        if (!fieldDef) return;
+        const dims = dimsFor(pendingFieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -347,9 +363,9 @@ export default function DocumentPrepare() {
             page_number: pageNumber,
             x,
             y,
-            width: fieldDef.w,
-            height: fieldDef.h,
-            ...fieldValueFor(pendingFieldType, signers.find((s) => s.id === selectedSigner)?.email, false),
+            width: dims.w,
+            height: dims.h,
+            ...placedExtras(pendingFieldType, false, signers.find((s) => s.id === selectedSigner)?.email),
           })
           .select()
           .single();
@@ -358,18 +374,18 @@ export default function DocumentPrepare() {
       }
       setPendingFieldType(null);
     },
-    [pendingFieldType, selectedSigner, selfSignMode, selfSigner, savedSignature, savedInitials, textValue, id, signers, accountDetails, user, fieldValueFor]
+    [pendingFieldType, selectedSigner, selfSignMode, selfSigner, id, signers, placedExtras]
   );
 
   const handlePageDrop = useCallback(
-    async (pageNumber: number, x: number, y: number, fieldType: string) => {
+    async (pageNumber: number, x: number, y: number, fieldType: string, sealLabel?: string) => {
       if (!id) return;
 
       if (selfSignMode) {
         if (!selfSigner) return;
         if (fieldType === "signature" && !savedSignature) { toast.error("Create a signature first"); return; }
         if (fieldType === "initials" && !savedInitials) { toast.error("Create initials first"); return; }
-        const dims = SELF_SIGN_FIELD_DIMS[fieldType] || { w: 150, h: 30 };
+        const dims = dimsFor(fieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -380,7 +396,7 @@ export default function DocumentPrepare() {
             x, y,
             width: dims.w,
             height: dims.h,
-            ...fieldValueFor(fieldType, selfSigner.email, true),
+            ...placedExtras(fieldType, true, selfSigner.email, sealLabel),
           })
           .select()
           .single();
@@ -388,8 +404,7 @@ export default function DocumentPrepare() {
         setSelfFields((prev) => [...prev, data]);
       } else {
         if (!selectedSigner) { toast.error("Select a signer first"); return; }
-        const fieldDef = FIELD_TYPES.find((f) => f.type === fieldType);
-        const dims = fieldDef ? { w: fieldDef.w, h: fieldDef.h } : { w: 150, h: 30 };
+        const dims = dimsFor(fieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -400,7 +415,7 @@ export default function DocumentPrepare() {
             x, y,
             width: dims.w,
             height: dims.h,
-            ...fieldValueFor(fieldType, signers.find((s) => s.id === selectedSigner)?.email, false),
+            ...placedExtras(fieldType, false, signers.find((s) => s.id === selectedSigner)?.email, sealLabel),
           })
           .select()
           .single();
@@ -408,7 +423,7 @@ export default function DocumentPrepare() {
         setFields((prev) => [...prev, data]);
       }
     },
-    [selectedSigner, selfSignMode, selfSigner, savedSignature, savedInitials, textValue, id, signers, accountDetails, pendingFieldType, user, fieldValueFor]
+    [selectedSigner, selfSignMode, selfSigner, id, signers, placedExtras]
   );
 
   const removeField = async (fieldId: string) => {
@@ -629,6 +644,11 @@ export default function DocumentPrepare() {
             onMove={moveField}
             onResize={resizeField}
             onDelete={removeField}
+            onAdjustFont={(fieldId, direction) => {
+              const field = [...fields, ...selfFields].find((item) => item.id === fieldId);
+              if (!field) return;
+              resizeField(fieldId, field.width, stepFieldHeight(field.height, direction));
+            }}
           />
         );
       });
@@ -725,6 +745,9 @@ export default function DocumentPrepare() {
               accountFullName={accountDetails.fullName}
               accountTitle={accountDetails.title}
               accountDate={accountDetails.dateLabel}
+              checkStyle={checkStyle}
+              onCheckStyle={setCheckStyle}
+              onPlaceSeal={(label) => { setPendingSeal(label); setPendingFieldType("seal"); }}
             />
           ) : (
             <>
@@ -863,6 +886,49 @@ export default function DocumentPrepare() {
                       </Button>
                     ))}
                   </div>
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Check marks</p>
+                    <div className="flex flex-wrap gap-1">
+                      {CHECK_STYLES.map((style) => (
+                        <Button
+                          key={style.id}
+                          variant={checkStyle === style.id && pendingFieldType === "checkmark" ? "default" : "outline"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          title={style.label}
+                          onClick={() => { setCheckStyle(style.id); handleFieldTypeClick("checkmark"); }}
+                        >
+                          {style.glyph}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Company seals</p>
+                    <div className="flex gap-2">
+                      {COMPANY_SEALS.map((seal) => (
+                        <button
+                          key={seal.id}
+                          type="button"
+                          title={seal.legalName}
+                          className="rounded-full border border-border bg-card p-1 hover:ring-2 hover:ring-primary"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("fieldType", "seal");
+                            e.dataTransfer.setData("sealLabel", seal.stampLabel);
+                            e.dataTransfer.effectAllowed = "copy";
+                          }}
+                          onClick={() => {
+                            if (!selectedSigner) { toast.error("Select a signer first"); return; }
+                            setPendingSeal(seal.stampLabel);
+                            setPendingFieldType("seal");
+                          }}
+                        >
+                          <img src={companySealDataUrl(seal.id)} alt={`${seal.legalName} corporate seal`} className="h-12 w-12" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {fields.length > 0 && (
                     <div className="mt-3 space-y-1">
                       {fields.map((f) => {
@@ -924,6 +990,7 @@ export default function DocumentPrepare() {
                 onPageClick={handlePageClick}
                 onPageDrop={handlePageDrop}
                 renderPageOverlay={renderPageOverlay}
+                nextTagLabel="Next page"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">

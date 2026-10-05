@@ -1,3 +1,6 @@
+import type { CheckStyle } from "@/lib/checkStyles";
+
+export type { CheckStyle };
 export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image" | "whiteout";
 
 export type ShapeType = "rect" | "circle" | "line";
@@ -28,6 +31,8 @@ export interface TextAnnotation extends BaseAnnotation {
 export interface StampAnnotation extends BaseAnnotation {
   type: "stamp";
   label: string;
+  width?: number;
+  height?: number;
 }
 
 export interface DrawingAnnotation {
@@ -40,6 +45,7 @@ export interface DrawingAnnotation {
 export interface CheckmarkAnnotation extends BaseAnnotation {
   type: "checkmark";
   size: number;
+  style?: CheckStyle;
 }
 
 export interface HighlightAnnotation extends BaseAnnotation {

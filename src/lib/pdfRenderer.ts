@@ -1,5 +1,9 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { wrapTextToWidth } from "@/lib/textWrap";
+import { pdfFontSizeForField } from "@/lib/fieldFont";
+import { checkAppearance } from "@/lib/checkStyles";
+import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
+import { drawCheckOnPage } from "@/components/pdf-editor/savePdfDocument";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -139,12 +143,22 @@ export async function generateSignedPdf(
     const pdfW = field.width / SCALE;
     const pdfH = field.height / SCALE;
 
+    if (field.field_type === "seal") {
+      const seal = sealByStampLabel(field.value);
+      if (!seal) continue;
+      const png = await svgToPngBytes(companySealSvg(seal.id));
+      const sealImage = await pdfDoc.embedPng(png);
+      page.drawImage(sealImage, { x: pdfX, y: pdfY, width: pdfW, height: pdfH });
+      continue;
+    }
+
     if (field.field_type === "signature" || field.field_type === "initials") {
       const imgData = signerSignatureMap.get(field.signer_id) || field.value;
       if (!imgData) continue;
 
-      const base64 = imgData.includes(",") ? imgData.split(",")[1] : imgData;
-      const imgBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const imgBytes = imgData.startsWith("data:image/svg")
+        ? await svgToPngBytes(decodeURIComponent(imgData.split(",")[1] || ""))
+        : Uint8Array.from(atob(imgData.includes(",") ? imgData.split(",")[1] : imgData), (c) => c.charCodeAt(0));
 
       let image;
       try {
@@ -186,7 +200,7 @@ export async function generateSignedPdf(
       field.field_type === "title"
     ) {
       if (!field.value) continue;
-      const size = Math.min(Math.max(8, pdfH * 0.45), 12);
+      const size = pdfFontSizeForField(pdfH);
       const maxW = Math.max(8, pdfW - 2);
       const lines = wrapTextToWidth(field.value, maxW, (sample) => font.widthOfTextAtSize(sample, size));
       const lineHeight = size * 1.2;
@@ -210,15 +224,10 @@ export async function generateSignedPdf(
         });
       }
     } else if (field.field_type === "checkbox" || field.field_type === "checkmark") {
-      if (field.value === "true" || field.value === "checked" || field.value === "✓" || field.value === "checkmark") {
-        const s = Math.min(pdfH * 0.8, 16);
-        page.drawSvgPath("M 2 12 L 9 19 L 22 5", {
-          x: pdfX + pdfW * 0.15,
-          y: pdfY + pdfH * 0.2 + s,
-          borderColor: rgb(0, 0, 0),
-          borderWidth: Math.max(1.2, s / 10),
-          scale: s / 24,
-        });
+      const appearance = checkAppearance(field.value);
+      if (appearance.filled || field.field_type === "checkbox" && (field.value === "true" || field.value === "checked")) {
+        const s = Math.min(pdfH * 0.8, 22);
+        drawCheckOnPage(page, appearance.style, pdfX + pdfW * 0.1, pdfY + pdfH * 0.15 + s, s);
       }
     }
   }

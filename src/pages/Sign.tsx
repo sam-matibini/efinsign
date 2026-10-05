@@ -24,6 +24,8 @@ import CelebrationConfetti from "@/components/CelebrationConfetti";
 import type { Tables } from "@/integrations/supabase/types";
 import { generateAndUploadSignedPdf } from "@/lib/pdfRenderer";
 import { format } from "date-fns";
+import { fontSizeForFieldHeight } from "@/lib/fieldFont";
+import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
 
 type FieldWithValue = Tables<"document_fields"> & { localValue?: string };
 
@@ -69,8 +71,14 @@ export default function Sign() {
   );
 
   // Next unfilled field
+  const fieldIsFilled = (f: FieldWithValue) => (
+    f.field_type === "checkmark" || f.field_type === "checkbox"
+      ? checkAppearance(f.localValue).filled
+      : !!f.localValue
+  );
+
   const nextUnfilledField = useMemo(
-    () => sortedFields.find(f => !f.localValue),
+    () => sortedFields.find(f => !fieldIsFilled(f)),
     [sortedFields]
   );
 
@@ -190,7 +198,7 @@ export default function Sign() {
     // Look from startIdx forward, then wrap around
     for (let i = 0; i < sorted.length; i++) {
       const f = sorted[(startIdx + i) % sorted.length];
-      if (!f.localValue) {
+      if (!fieldIsFilled(f)) {
         setHighlightedFieldId(f.id);
         scrollToField(f.id);
         return;
@@ -217,8 +225,8 @@ export default function Sign() {
       // Auto-advance after date fill
       setTimeout(() => advanceToNextUnfilled(field.id), 300);
     } else if (type === "checkmark" || type === "checkbox") {
-      const current = field.localValue;
-      updateFieldValue(field.id, current ? "" : "✓");
+      const appearance = checkAppearance(field.localValue);
+      updateFieldValue(field.id, appearance.filled ? "" : appearance.style);
       // Auto-advance after toggle
       setTimeout(() => advanceToNextUnfilled(field.id), 300);
     } else {
@@ -260,12 +268,12 @@ export default function Sign() {
   }, [nextUnfilledField, scrollToField, handleFieldClick]);
 
   const REQUIRED_TYPES = ["signature", "initials", "name", "date", "full_name", "title"];
-  const filledCount = fields.filter(f => !!f.localValue).length;
+  const filledCount = fields.filter(fieldIsFilled).length;
   const totalCount = fields.length;
   const requiredFields = fields.filter(f => REQUIRED_TYPES.includes(f.field_type));
-  const unfilledRequired = requiredFields.filter(f => !f.localValue);
+  const unfilledRequired = requiredFields.filter(f => !fieldIsFilled(f));
   const allRequiredFilled = unfilledRequired.length === 0;
-  const allFieldsFilled = fields.every(f => !!f.localValue);
+  const allFieldsFilled = fields.every(fieldIsFilled);
 
   const notifyOwner = useCallback(async (documentId: string, signerName: string, signerEmail: string, filledFields: FieldWithValue[]) => {
     try {
@@ -399,9 +407,10 @@ export default function Sign() {
     return (
       <div className="absolute inset-0 pointer-events-none">
         {pageFields.map(field => {
-          const filled = !!field.localValue;
           const isSignatureType = field.field_type === "signature" || field.field_type === "initials";
           const isCheckType = field.field_type === "checkmark" || field.field_type === "checkbox";
+          const checkState = isCheckType ? checkAppearance(field.localValue) : null;
+          const filled = checkState ? checkState.filled : !!field.localValue;
           const isRequired = REQUIRED_TYPES.includes(field.field_type);
           const isUnfilledRequired = isRequired && !filled;
           const isHighlighted = highlightedFieldId === field.id;
@@ -438,12 +447,12 @@ export default function Sign() {
                     className="w-full h-full object-contain"
                   />
                 ) : isCheckType ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Check className="h-5 w-5 text-green-600" />
+                  <div className="w-full h-full flex items-center justify-center font-bold text-green-700" style={{ fontSize: fontSizeForFieldHeight(field.height) }}>
+                    {checkGlyph(checkState?.style || "check")}
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-start px-1 overflow-hidden">
-                    <span className="text-xs text-foreground whitespace-pre-wrap break-words leading-tight">{field.localValue}</span>
+                    <span className="text-foreground whitespace-pre-wrap break-words leading-tight" style={{ fontSize: fontSizeForFieldHeight(field.height) }}>{field.localValue}</span>
                   </div>
                 )
               ) : (
@@ -776,6 +785,15 @@ export default function Sign() {
               url={pdfUrl}
               className="w-full"
               renderPageOverlay={renderPageOverlay}
+              nextTagLabel="Next"
+              onNextFromPage={(pageNumber) => {
+                if (nextUnfilledField && nextUnfilledField.page_number > pageNumber) {
+                  setHighlightedFieldId(nextUnfilledField.id);
+                  scrollToField(nextUnfilledField.id);
+                  return;
+                }
+                document.querySelector(`[data-page="${pageNumber + 1}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
             />
           </Card>
         )}

@@ -1,5 +1,7 @@
-import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, degrees, type PDFPage } from "pdf-lib";
 import { wrapTextToWidth } from "@/lib/textWrap";
+import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
+import type { CheckStyle } from "@/lib/checkStyles";
 import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
 function hexToRgb(hex: string) {
@@ -7,6 +9,28 @@ function hexToRgb(hex: string) {
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   return rgb(r, g, b);
+}
+
+export function drawCheckOnPage(page: PDFPage, style: CheckStyle, x: number, y: number, size: number) {
+  const color = rgb(0.1, 0.45, 0.18);
+  const borderWidth = Math.max(1.2, size / (style === "bold" || style === "double" ? 7 : 10));
+  const scale = size / 24;
+  const mark = (dx = 0) => page.drawSvgPath("M 2 12 L 9 19 L 22 5", {
+    x: x + dx, y, borderColor: color, borderWidth, scale,
+  });
+  if (style === "cross") {
+    page.drawLine({ start: { x, y: y - size }, end: { x: x + size, y }, color, thickness: borderWidth });
+    page.drawLine({ start: { x, y }, end: { x: x + size, y: y - size }, color, thickness: borderWidth });
+    return;
+  }
+  if (style === "box") {
+    page.drawRectangle({ x, y: y - size, width: size, height: size, borderColor: color, borderWidth });
+  }
+  if (style === "circle") {
+    page.drawEllipse({ x: x + size / 2, y: y - size / 2, xScale: size / 2, yScale: size / 2, borderColor: color, borderWidth });
+  }
+  mark();
+  if (style === "double") mark(size * 0.55);
 }
 
 export async function savePdfDocument(
@@ -91,6 +115,15 @@ export async function savePdfDocument(
       }
       case "stamp": {
         const sa = ann as StampAnnotation;
+        const seal = sealByStampLabel(sa.label);
+        if (seal) {
+          const png = await svgToPngBytes(companySealSvg(seal.id));
+          const image = await newDoc.embedPng(png);
+          const sw = ((sa.width || 150) / cw) * pw;
+          const sh = ((sa.height || 150) / ch) * ph;
+          page.drawImage(image, { x: toPdfX(sa.x), y: toPdfY(sa.y + (sa.height || 150)), width: sw, height: sh });
+          break;
+        }
         page.drawText(sa.label.toUpperCase(), {
           x: toPdfX(sa.x), y: toPdfY(sa.y), size: 36, font: boldFont,
           color: rgb(0.8, 0.1, 0.1), opacity: 0.4,
@@ -110,13 +143,7 @@ export async function savePdfDocument(
         const cx = toPdfX(ca.x);
         const cy = toPdfY(ca.y);
         const s = (ca.size / ch) * ph;
-        page.drawSvgPath("M 2 12 L 9 19 L 22 5", {
-          x: cx,
-          y: cy,
-          borderColor: rgb(0.13, 0.55, 0.13),
-          borderWidth: Math.max(1.5, s / 8),
-          scale: s / 24,
-        });
+        drawCheckOnPage(page, ca.style || "check", cx, cy, s);
         break;
       }
       case "highlight": {

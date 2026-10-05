@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from "react";
 import { Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
+import { checkGlyph } from "@/lib/checkStyles";
+import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
 import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
 type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
@@ -22,6 +24,7 @@ function textBox(ann: TextAnnotation) {
 
 function boxSize(ann: Annotation): { width: number; height: number } | null {
   if (ann.type === "text") return textBox(ann);
+  if (ann.type === "stamp" && ann.width && ann.height) return { width: ann.width, height: ann.height };
   if (ann.type === "highlight" || ann.type === "shape" || ann.type === "image" || ann.type === "whiteout") {
     return { width: ann.width, height: ann.height };
   }
@@ -218,12 +221,24 @@ export default function AnnotationOverlay({
               />
             )}
             {ann.type === "stamp" && (
-              <span className="font-bold text-3xl text-destructive/40 uppercase select-none" style={{ transform: "rotate(-30deg)", display: "inline-block" }}>
-                {(ann as StampAnnotation).label}
-              </span>
+              sealByStampLabel((ann as StampAnnotation).label) ? (
+                <img
+                  src={companySealDataUrl(sealByStampLabel((ann as StampAnnotation).label)!.id)}
+                  alt={sealByStampLabel((ann as StampAnnotation).label)!.legalName}
+                  draggable={false}
+                  className="select-none"
+                  style={{ width: (ann as StampAnnotation).width || 150, height: (ann as StampAnnotation).height || 150 }}
+                />
+              ) : (
+                <span className="font-bold text-3xl text-destructive/40 uppercase select-none" style={{ transform: "rotate(-30deg)", display: "inline-block" }}>
+                  {(ann as StampAnnotation).label}
+                </span>
+              )
             )}
             {ann.type === "checkmark" && (
-              <span style={{ fontSize: (ann as CheckmarkAnnotation).size }} className="text-green-600 font-bold select-none">✓</span>
+              <span style={{ fontSize: (ann as CheckmarkAnnotation).size }} className="text-green-700 font-bold select-none leading-none">
+                {checkGlyph((ann as CheckmarkAnnotation).style || "check")}
+              </span>
             )}
             {ann.type === "highlight" && (
               <div

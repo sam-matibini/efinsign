@@ -17,6 +17,9 @@ import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
 import type { Annotation, DrawingAnnotation, EditorFont, TextAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
+import type { CheckStyle } from "@/lib/checkStyles";
+import { sealByStampLabel } from "@/lib/companySeals";
+import PageDemarcator from "@/components/PageDemarcator";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -106,6 +109,7 @@ export default function PdfEdit() {
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
   const [checkmarkSize, setCheckmarkSize] = useState(28);
+  const [checkStyle, setCheckStyle] = useState<CheckStyle>("check");
   const [highlightColor, setHighlightColor] = useState("#fde047");
   const [highlightOpacity, setHighlightOpacity] = useState(0.3);
   const [shapeType, setShapeType] = useState<ShapeType>("rect");
@@ -211,14 +215,18 @@ export default function PdfEdit() {
         setEditingText({ pageIndex, x, y });
         setTextValue("");
       } else if (tool === "stamp" && selectedStamp) {
-        setAnnotations((prev) => [...prev, { type: "stamp", id: genId(), pageIndex, x, y, label: selectedStamp }]);
+        const seal = sealByStampLabel(selectedStamp);
+        setAnnotations((prev) => [...prev, {
+          type: "stamp", id: genId(), pageIndex, x, y, label: selectedStamp,
+          ...(seal ? { width: 150, height: 150 } : {}),
+        }]);
       } else if (tool === "checkmark") {
-        setAnnotations((prev) => [...prev, { type: "checkmark", id: genId(), pageIndex, x, y, size: checkmarkSize }]);
+        setAnnotations((prev) => [...prev, { type: "checkmark", id: genId(), pageIndex, x, y, size: checkmarkSize, style: checkStyle }]);
       } else if (tool === "image" && pendingImage) {
         setAnnotations((prev) => [...prev, { type: "image", id: genId(), pageIndex, x, y, width: 150, height: 150, imageData: pendingImage }]);
       }
     },
-    [tool, selectedStamp, checkmarkSize, pendingImage, pages, setAnnotations]
+    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations]
   );
 
   const textCommitRef = useRef(false);
@@ -395,6 +403,16 @@ export default function PdfEdit() {
         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
         selectedStamp={selectedStamp} setSelectedStamp={setSelectedStamp}
         checkmarkSize={checkmarkSize} setCheckmarkSize={setCheckmarkSize}
+        checkStyle={checkStyle} setCheckStyle={setCheckStyle}
+        onBumpFont={(delta) => {
+          setFontSize((size) => Math.min(72, Math.max(8, size + delta)));
+          if (!selectedAnnotationId) return;
+          setAnnotations((prev) => prev.map((ann) => {
+            if (ann.id !== selectedAnnotationId || ann.type !== "text") return ann;
+            const fontSizeNext = Math.min(72, Math.max(8, ann.fontSize + delta));
+            return { ...ann, fontSize: fontSizeNext, height: estimateWrappedHeight(ann.text, fontSizeNext, ann.width || DEFAULT_TEXT_BOX_WIDTH) };
+          }));
+        }}
         highlightColor={highlightColor} setHighlightColor={setHighlightColor}
         highlightOpacity={highlightOpacity} setHighlightOpacity={setHighlightOpacity}
         shapeType={shapeType} setShapeType={setShapeType}
@@ -430,6 +448,7 @@ export default function PdfEdit() {
               return (
                 <div
                   key={`${pageState.pageNum}-${index}`}
+                  data-editor-page={index}
                   className={`relative inline-block shadow-md ${activePageIndex === index ? "ring-2 ring-primary" : ""}`}
                   onClick={(e) => handlePageClick(index, e)}
                   style={{ cursor: tool === "text" || tool === "stamp" || tool === "checkmark" || tool === "image" ? "crosshair" : undefined }}
@@ -514,6 +533,18 @@ export default function PdfEdit() {
                     </div>
                   )}
                 </div>
+                <PageDemarcator
+                  page={pages.slice(0, index + 1).filter((p) => !p.deleted).length}
+                  total={pages.filter((p) => !p.deleted).length}
+                  nextLabel="Next page"
+                  onNext={index < pages.length - 1 ? () => {
+                    const next = pages.findIndex((p, i) => i > index && !p.deleted);
+                    if (next >= 0) {
+                      setActivePageIndex(next);
+                      document.querySelector(`[data-editor-page="${next}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  } : undefined}
+                />
               );
             })}
           </div>

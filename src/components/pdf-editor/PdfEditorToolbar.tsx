@@ -9,6 +9,7 @@ import {
   Undo2, Redo2, Eraser, Droplets, PanelTop, Bold
 } from "lucide-react";
 import type { EditorFont, ToolMode, ShapeType } from "./types";
+import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -37,6 +38,9 @@ interface PdfEditorToolbarProps {
   setSelectedStamp: (s: string | null) => void;
   checkmarkSize: number;
   setCheckmarkSize: (s: number) => void;
+  checkStyle: CheckStyle;
+  setCheckStyle: (s: CheckStyle) => void;
+  onBumpFont: (delta: number) => void;
   highlightColor: string;
   setHighlightColor: (c: string) => void;
   highlightOpacity: number;
@@ -67,6 +71,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     textColor, setTextColor, textFont, setTextFont, textBold, setTextBold,
     drawColor, setDrawColor, strokeWidth, setStrokeWidth,
     selectedStamp, setSelectedStamp, checkmarkSize, setCheckmarkSize,
+    checkStyle, setCheckStyle, onBumpFont,
     highlightColor, setHighlightColor, highlightOpacity, setHighlightOpacity,
     shapeType, setShapeType, shapeStrokeColor, setShapeStrokeColor,
     shapeFillColor, setShapeFillColor, shapeStrokeWidth, setShapeStrokeWidth,
@@ -126,11 +131,13 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
           <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
             <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36].map((s) => (
+              {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 60, 72].map((s) => (
                 <SelectItem key={s} value={String(s)}>{s}px</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => onBumpFont(-2)} title="Smaller text">A−</Button>
+          <Button variant="outline" size="sm" className="h-8 px-2 text-sm font-semibold" onClick={() => onBumpFont(2)} title="Larger text">A+</Button>
           <Select value={textFont} onValueChange={(v) => setTextFont(v as EditorFont)}>
             <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -189,6 +196,20 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
       {/* Checkmark options */}
       {tool === "checkmark" && (
         <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            {CHECK_STYLES.map((style) => (
+              <Button
+                key={style.id}
+                variant={checkStyle === style.id ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-1.5 text-xs"
+                title={style.label}
+                onClick={() => setCheckStyle(style.id)}
+              >
+                {style.glyph}
+              </Button>
+            ))}
+          </div>
           <Label className="text-xs">Size:</Label>
           <Select value={String(checkmarkSize)} onValueChange={(v) => setCheckmarkSize(Number(v))}>
             <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
