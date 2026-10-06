@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Search, FileText, Clock, CheckCircle2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
@@ -18,13 +16,22 @@ import { toast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
 type Document = Tables<"documents">;
+type StatusFilter = "all" | "pending" | "completed" | "other";
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
-  draft: { label: "Draft", variant: "secondary" },
-  pending: { label: "Pending", variant: "warning" },
-  completed: { label: "Completed", variant: "success" },
-  expired: { label: "Expired", variant: "destructive" },
-  declined: { label: "Declined", variant: "destructive" },
+const statusLabel: Record<string, string> = {
+  draft: "Draft",
+  pending: "Pending",
+  completed: "Completed",
+  expired: "Expired",
+  declined: "Declined",
+};
+
+const statusClass: Record<string, string> = {
+  draft: "bg-[#eef1ea] text-[#3d4a3a] dark:bg-white/10 dark:text-[#d5e0cc]",
+  pending: "bg-[#fff4df] text-[#8a5a00] dark:bg-[#3a2a0c] dark:text-[#f3c56b]",
+  completed: "bg-[#e7f7c4] text-[#24520f] dark:bg-[#1b3114] dark:text-[#d6f59a]",
+  expired: "bg-[#fde8e8] text-[#9f1239] dark:bg-[#3f1520] dark:text-[#fecdd3]",
+  declined: "bg-[#fde8e8] text-[#9f1239] dark:bg-[#3f1520] dark:text-[#fecdd3]",
 };
 
 export default function Dashboard() {
@@ -33,6 +40,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,9 +58,24 @@ export default function Dashboard() {
     fetchDocs();
   }, [user, currentOrg]);
 
-  const filtered = documents.filter((d) =>
-    d.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = documents.filter((d) => {
+    const matchesSearch = d.title.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "other"
+        ? d.status !== "pending" && d.status !== "completed"
+        : d.status === statusFilter);
+    return matchesSearch && matchesStatus;
+  });
+
+  const stats = useMemo(() => {
+    const total = documents.length;
+    const pending = documents.filter((d) => d.status === "pending").length;
+    const completed = documents.filter((d) => d.status === "completed").length;
+    const other = total - pending - completed;
+    const completion = total === 0 ? 0 : Math.round((completed / total) * 100);
+    return { total, pending, completed, other, completion };
+  }, [documents]);
 
   const handleDelete = async (doc: Document) => {
     if (doc.file_path) {
@@ -70,14 +93,15 @@ export default function Dashboard() {
     toast({ title: "Deleted", description: `"${doc.title}" has been deleted.` });
   };
 
-  const stats = {
-    total: documents.length,
-    pending: documents.filter((d) => d.status === "pending").length,
-    completed: documents.filter((d) => d.status === "completed").length,
-  };
+  const filters: { id: StatusFilter; label: string; count: number }[] = [
+    { id: "all", label: "All", count: stats.total },
+    { id: "pending", label: "Awaiting", count: stats.pending },
+    { id: "completed", label: "Completed", count: stats.completed },
+    ...(stats.other > 0 || statusFilter === "other" ? [{ id: "other" as const, label: "Other", count: stats.other }] : []),
+  ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="-m-6 min-h-[calc(100vh-3.5rem)] bg-[#f3f5f0] text-[#0b1f33] dark:bg-[#071018] dark:text-[#e7eee4]">
       <Helmet>
         <title>Dashboard - eFinSign</title>
         <meta name="description" content="Manage your documents, track signatures, and view activity in your eFinSign dashboard." />
@@ -85,131 +109,218 @@ export default function Dashboard() {
         <meta property="og:description" content="Manage your documents and signatures in eFinSign." />
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-display font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage your documents and signatures</p>
-        </div>
-        <Button onClick={() => navigate("/documents/new")} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Document
-        </Button>
-      </div>
 
-      {/* Stats */}
-      <section aria-labelledby="dashboard-stats-heading">
-        <h2 id="dashboard-stats-heading" className="sr-only">Statistics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-display font-bold">{stats.total}</p>
-              <p className="text-sm text-muted-foreground">Total Documents</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="h-12 w-12 rounded-lg bg-warning/10 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-display font-bold">{stats.pending}</p>
-              <p className="text-sm text-muted-foreground">Awaiting Signature</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="h-12 w-12 rounded-lg bg-success/10 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-display font-bold">{stats.completed}</p>
-              <p className="text-sm text-muted-foreground">Completed</p>
-            </div>
-          </CardContent>
-        </Card>
+      <section className="relative overflow-hidden bg-[#0b1f33] px-5 pb-16 pt-7 text-white sm:px-8 sm:pt-8">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#d6f34a]/20 blur-3xl" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/10" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d6f34a]">Signing workspace</p>
+            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
+            <p className="mt-2 max-w-xl text-sm text-white/70">
+              {currentOrg?.name ? `${currentOrg.name} · ` : ""}Documents, signatures, and what still needs a hand.
+            </p>
+          </div>
+          <Button
+            onClick={() => navigate("/documents/new")}
+            className="h-11 gap-2 self-start rounded-full bg-[#d6f34a] px-5 font-semibold text-[#0b1f33] hover:bg-[#e4fb86] sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            New Document
+          </Button>
         </div>
       </section>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search documents..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <div className="space-y-5 px-5 pb-8 sm:px-8">
+        <section aria-labelledby="dashboard-stats-heading" className="relative z-10 -mt-10">
+          <h2 id="dashboard-stats-heading" className="sr-only">Statistics</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <StatCard
+              icon={FileText}
+              value={stats.total}
+              label="Total documents"
+              detail={currentOrg?.name || "This workspace"}
+            />
+            <StatCard
+              icon={Clock}
+              value={stats.pending}
+              label="Awaiting signature"
+              detail={stats.pending > 0 ? "Still open" : "Nothing waiting"}
+              detailClass={stats.pending > 0 ? "text-[#8a5a00] dark:text-[#f3c56b]" : undefined}
+            />
+            <StatCard
+              icon={CheckCircle2}
+              value={stats.completed}
+              label="Completed"
+              detail={`${stats.completion}% signed`}
+              meter={stats.completion}
+            />
+          </div>
+        </section>
 
-      {/* Document List */}
-      <section aria-labelledby="dashboard-docs-heading" className="space-y-2">
-        <h2 id="dashboard-docs-heading" className="sr-only">Documents</h2>
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : filtered.length === 0 ? (
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground text-lg">No documents yet</p>
-              <p className="text-muted-foreground/70 text-sm mt-1">Create your first document to get started</p>
-              <Button onClick={() => navigate("/documents/new")} className="mt-4 gap-2">
-                <Plus className="h-4 w-4" />
-                New Document
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          filtered.map((doc) => (
-            <Card
-              key={doc.id}
-              className="bg-card border-border hover:bg-muted/50 transition-colors cursor-pointer"
-              onClick={() => navigate(`/documents/${doc.id}`)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
+        <section aria-labelledby="dashboard-docs-heading" className="overflow-hidden rounded-2xl border border-[#e3e8de] bg-white shadow-[0_16px_40px_-28px_rgba(11,31,51,0.55)] dark:border-white/10 dark:bg-[#0e1a27]">
+          <div className="flex flex-col gap-4 border-b border-[#e8ede4] px-4 py-4 dark:border-white/10 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 id="dashboard-docs-heading" className="font-display text-lg font-semibold">Documents</h2>
+              <p className="text-sm text-[#5c6b62] dark:text-white/55">
+                {loading ? "Loading the register" : `${filtered.length} shown`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex gap-1 overflow-x-auto" role="group" aria-label="Filter documents">
+                {filters.map((filter) => {
+                  const active = statusFilter === filter.id;
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setStatusFilter(filter.id)}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        active
+                          ? "bg-[#0b1f33] text-[#d6f34a]"
+                          : "bg-[#f3f5f0] text-[#3d4d44] hover:bg-[#e7ece2] dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                      }`}
+                    >
+                      {filter.label}
+                      <span className="ml-1.5 tabular-nums opacity-80">{filter.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative sm:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6d7c72]" />
+                <Input
+                  placeholder="Search documents..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-10 border-[#dbe3d6] bg-[#f7f8f5] pl-9 dark:border-white/10 dark:bg-white/5"
+                />
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-[#eef2ea] dark:bg-white/5" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0b1f33] text-[#d6f34a]">
+                <FileText className="h-6 w-6" />
+              </div>
+              <p className="font-display text-lg font-semibold">
+                {documents.length === 0 ? "No documents yet" : "No documents match"}
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-[#5c6b62] dark:text-white/55">
+                {documents.length === 0
+                  ? "Create your first document to get started."
+                  : "Try another filter or clear the search."}
+              </p>
+              {documents.length === 0 && (
+                <Button
+                  onClick={() => navigate("/documents/new")}
+                  className="mt-5 gap-2 rounded-full bg-[#0b1f33] text-white hover:bg-[#16324d] dark:bg-[#d6f34a] dark:text-[#0b1f33] dark:hover:bg-[#e4fb86]"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Document
+                </Button>
+              )}
+            </div>
+          ) : (
+            <ul>
+              {filtered.map((doc) => (
+                <li key={doc.id} className="border-b border-[#eef2ea] last:border-b-0 dark:border-white/5">
+                  <div
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/documents/${doc.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigate(`/documents/${doc.id}`);
+                      }
+                    }}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-[#f7faf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0b1f33] dark:hover:bg-white/[0.03] sm:gap-4 sm:px-5"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0b1f33] text-[#d6f34a]">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{doc.title}</p>
+                      <p className="text-xs text-[#6d7c72] dark:text-white/50">
+                        {format(new Date(doc.created_at), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClass[doc.status] || statusClass.draft}`}>
+                      {statusLabel[doc.status] || doc.status}
+                    </span>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-[#6d7c72] hover:bg-[#fde8e8] hover:text-[#9f1239]"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Delete ${doc.title}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete document?</AlertDialogTitle>
+                          <AlertDialogDescription>This will permanently delete "{doc.title}" and all associated data.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDelete(doc)}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
-                  <div>
-                    <p className="font-medium">{doc.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(doc.created_at), "MMM d, yyyy")}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={statusConfig[doc.status]?.variant || "secondary"}>
-                    {statusConfig[doc.status]?.label || doc.status}
-                  </Badge>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => e.stopPropagation()} aria-label={`Delete ${doc.title}`}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete document?</AlertDialogTitle>
-                        <AlertDialogDescription>This will permanently delete "{doc.title}" and all associated data.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDelete(doc)}>Delete</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </section>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  value,
+  label,
+  detail,
+  detailClass,
+  meter,
+}: {
+  icon: typeof FileText;
+  value: number;
+  label: string;
+  detail: string;
+  detailClass?: string;
+  meter?: number;
+}) {
+  return (
+    <article className="rounded-2xl border border-[#e3e8de] bg-white p-5 shadow-[0_16px_40px_-28px_rgba(11,31,51,0.65)] dark:border-white/10 dark:bg-[#0e1a27]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#3e4f46] dark:text-white/70">{label}</p>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0b1f33] text-[#d6f34a]">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+      <p className="mt-3 font-display text-3xl font-semibold tabular-nums tracking-tight">{value}</p>
+      <p className={`mt-1 text-sm ${detailClass || "text-[#5c6b62] dark:text-white/55"}`}>{detail}</p>
+      {typeof meter === "number" && (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#e7ece2] dark:bg-white/10">
+          <div className="h-full rounded-full bg-[#b6e234]" style={{ width: `${meter}%` }} />
+        </div>
+      )}
+    </article>
   );
 }

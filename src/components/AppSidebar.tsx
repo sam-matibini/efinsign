@@ -164,7 +164,7 @@ export function AppSidebar() {
                 .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url} end={item.url === "/"} className="hover:bg-sidebar-accent/50 py-3" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                    <NavLink to={item.url} end={item.url === "/"} className="hover:bg-sidebar-accent/50 py-3 border-l-2 border-transparent" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-[#d6f34a]">
                       <item.icon className={`mr-3 h-5 w-5 ${item.color}`} />
                       {!collapsed && <span className="text-sm">{item.title}</span>}
                     </NavLink>
