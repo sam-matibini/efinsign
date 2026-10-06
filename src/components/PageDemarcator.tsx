@@ -18,7 +18,7 @@ export default function PageDemarcator({ page, total, onNext, nextLabel }: PageD
           <button
             type="button"
             onClick={onNext}
-            className="inline-flex items-center gap-1 rounded-sm bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+            className="inline-flex items-center gap-1 rounded-sm bg-brand px-2.5 py-1 text-[11px] font-semibold text-brand-foreground shadow-sm hover:bg-brand/90"
             data-next-page={page}
           >
             {nextLabel || "Next"}

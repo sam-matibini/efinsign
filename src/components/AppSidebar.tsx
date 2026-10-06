@@ -30,16 +30,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 const mainItems = [
-  { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-blue-500" },
-  { id: "documents", title: "Documents", url: "/documents", icon: FileText, color: "text-emerald-500" },
-  { id: "new", title: "New Document", url: "/documents/new", icon: FilePlus, color: "text-orange-500" },
-  { id: "fill", title: "Fill & Sign", url: "/documents/new?flow=fill", icon: PenTool, color: "text-violet-500" },
-  { id: "editor", title: "PDF Editor", url: "/pdf-editor", icon: FilePenLine, color: "text-cyan-500" },
-  { id: "request", title: "Request e-Signatures", url: "/documents/new?flow=request", icon: Send, color: "text-rose-500" },
-  { id: "clients", title: "Clients", url: "/clients", icon: Users, color: "text-amber-500" },
-  { id: "templates", title: "Templates", url: "/templates", icon: FolderOpen, color: "text-teal-500" },
-  { id: "admin", title: "Admin", url: "/admin", icon: ShieldCheck, color: "text-red-500" },
-  { id: "settings", title: "Settings", url: "/settings/organization", icon: Settings, color: "text-slate-500" },
+  { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { id: "documents", title: "Documents", url: "/documents", icon: FileText },
+  { id: "new", title: "New Document", url: "/documents/new", icon: FilePlus },
+  { id: "fill", title: "Fill & Sign", url: "/documents/new?flow=fill", icon: PenTool },
+  { id: "editor", title: "PDF Editor", url: "/pdf-editor", icon: FilePenLine },
+  { id: "request", title: "Request e-Signatures", url: "/documents/new?flow=request", icon: Send },
+  { id: "clients", title: "Clients", url: "/clients", icon: Users },
+  { id: "templates", title: "Templates", url: "/templates", icon: FolderOpen },
+  { id: "admin", title: "Admin", url: "/admin", icon: ShieldCheck },
+  { id: "settings", title: "Settings", url: "/settings/organization", icon: Settings },
 ];
 
 /** One sidebar tab is highlighted. Shared routes are split by the flow query. */
@@ -98,7 +98,7 @@ export function AppSidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={efinsignLogo} alt="eFinSign" className="h-8 w-8 rounded-lg shrink-0 object-contain" />
-            {!collapsed && <span className="font-display font-bold text-lg text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] hover:drop-shadow-[0_0_16px_rgba(59,130,246,0.8)] hover:scale-105 transition-all duration-300 cursor-default">eFinSign</span>}
+            {!collapsed && <span className="font-display font-bold text-lg text-white">eFinSign</span>}
           </div>
           {!collapsed && (
             <button onClick={toggleSidebar} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -182,8 +182,8 @@ export function AppSidebar() {
                 .map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton asChild isActive={activeId === item.id}>
-                    <NavLink to={item.url} end isActiveOverride={activeId === item.id} className="hover:bg-sidebar-accent/50 py-3 border-l-2 border-transparent" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-[#d6f34a]">
-                      <item.icon className={`mr-3 h-5 w-5 ${item.color}`} />
+                    <NavLink to={item.url} end isActiveOverride={activeId === item.id} className="hover:bg-sidebar-accent/50 py-3 border-l-2 border-transparent" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-brand">
+                      <item.icon className="mr-3 h-5 w-5 text-brand" />
                       {!collapsed && <span className="text-sm">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>

@@ -101,7 +101,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="-m-6 min-h-[calc(100vh-3.5rem)] bg-[#f3f5f0] text-[#0b1f33] dark:bg-[#071018] dark:text-[#e7eee4]">
+    <div className="-m-6 min-h-[calc(100vh-3.5rem)] bg-background text-foreground">
       <Helmet>
         <title>Dashboard - eFinSign</title>
         <meta name="description" content="Manage your documents, track signatures, and view activity in your eFinSign dashboard." />
@@ -110,12 +110,12 @@ export default function Dashboard() {
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      <section className="relative overflow-hidden bg-[#0b1f33] px-5 pb-16 pt-7 text-white sm:px-8 sm:pt-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#d6f34a]/20 blur-3xl" />
+      <section className="relative overflow-hidden bg-sidebar px-5 pb-16 pt-7 text-white sm:px-8 sm:pt-8">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-brand/20 blur-3xl" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/10" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d6f34a]">Signing workspace</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-brand">Signing workspace</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
             <p className="mt-2 max-w-xl text-sm text-white/70">
               {currentOrg?.name ? `${currentOrg.name} · ` : ""}Documents, signatures, and what still needs a hand.
@@ -123,7 +123,7 @@ export default function Dashboard() {
           </div>
           <Button
             onClick={() => navigate("/documents/new")}
-            className="h-11 gap-2 self-start rounded-full bg-[#d6f34a] px-5 font-semibold text-[#0b1f33] hover:bg-[#e4fb86] sm:self-auto"
+            className="h-11 gap-2 self-start rounded-full bg-brand px-5 font-semibold text-brand-foreground hover:bg-brand/90 sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             New Document
@@ -158,11 +158,11 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section aria-labelledby="dashboard-docs-heading" className="overflow-hidden rounded-2xl border border-[#e3e8de] bg-white shadow-[0_16px_40px_-28px_rgba(11,31,51,0.55)] dark:border-white/10 dark:bg-[#0e1a27]">
-          <div className="flex flex-col gap-4 border-b border-[#e8ede4] px-4 py-4 dark:border-white/10 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <section aria-labelledby="dashboard-docs-heading" className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_40px_-28px_rgba(11,31,51,0.55)]">
+          <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 id="dashboard-docs-heading" className="font-display text-lg font-semibold">Documents</h2>
-              <p className="text-sm text-[#5c6b62] dark:text-white/55">
+              <p className="text-sm text-muted-foreground">
                 {loading ? "Loading the register" : `${filtered.length} shown`}
               </p>
             </div>
@@ -178,8 +178,8 @@ export default function Dashboard() {
                       onClick={() => setStatusFilter(filter.id)}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                         active
-                          ? "bg-[#0b1f33] text-[#d6f34a]"
-                          : "bg-[#f3f5f0] text-[#3d4d44] hover:bg-[#e7ece2] dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                          ? "bg-primary text-brand dark:bg-brand dark:text-brand-foreground"
+                          : "bg-secondary text-secondary-foreground hover:bg-accent"
                       }`}
                     >
                       {filter.label}
@@ -189,12 +189,12 @@ export default function Dashboard() {
                 })}
               </div>
               <div className="relative sm:w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6d7c72]" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search documents..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 border-[#dbe3d6] bg-[#f7f8f5] pl-9 dark:border-white/10 dark:bg-white/5"
+                  className="h-10 border-input bg-secondary pl-9"
                 />
               </div>
             </div>
@@ -203,18 +203,18 @@ export default function Dashboard() {
           {loading ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl bg-[#eef2ea] dark:bg-white/5" />
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0b1f33] text-[#d6f34a]">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sidebar text-brand">
                 <FileText className="h-6 w-6" />
               </div>
               <p className="font-display text-lg font-semibold">
                 {documents.length === 0 ? "No documents yet" : "No documents match"}
               </p>
-              <p className="mt-1 max-w-sm text-sm text-[#5c6b62] dark:text-white/55">
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                 {documents.length === 0
                   ? "Create your first document to get started."
                   : "Try another filter or clear the search."}
@@ -222,7 +222,7 @@ export default function Dashboard() {
               {documents.length === 0 && (
                 <Button
                   onClick={() => navigate("/documents/new")}
-                  className="mt-5 gap-2 rounded-full bg-[#0b1f33] text-white hover:bg-[#16324d] dark:bg-[#d6f34a] dark:text-[#0b1f33] dark:hover:bg-[#e4fb86]"
+                  className="mt-5 gap-2 rounded-full bg-brand text-brand-foreground hover:bg-brand/90"
                 >
                   <Plus className="h-4 w-4" />
                   New Document
@@ -232,7 +232,7 @@ export default function Dashboard() {
           ) : (
             <ul>
               {filtered.map((doc) => (
-                <li key={doc.id} className="border-b border-[#eef2ea] last:border-b-0 dark:border-white/5">
+                <li key={doc.id} className="border-b border-border last:border-b-0">
                   <div
                     role="link"
                     tabIndex={0}
@@ -243,14 +243,14 @@ export default function Dashboard() {
                         navigate(`/documents/${doc.id}`);
                       }
                     }}
-                    className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-[#f7faf3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0b1f33] dark:hover:bg-white/[0.03] sm:gap-4 sm:px-5"
+                    className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4 sm:px-5"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0b1f33] text-[#d6f34a]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sidebar text-brand">
                       <FileText className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{doc.title}</p>
-                      <p className="text-xs text-[#6d7c72] dark:text-white/50">
+                      <p className="text-xs text-muted-foreground">
                         {format(new Date(doc.created_at), "MMM d, yyyy")}
                       </p>
                     </div>
@@ -307,18 +307,18 @@ function StatCard({
   meter?: number;
 }) {
   return (
-    <article className="rounded-2xl border border-[#e3e8de] bg-white p-5 shadow-[0_16px_40px_-28px_rgba(11,31,51,0.65)] dark:border-white/10 dark:bg-[#0e1a27]">
+    <article className="rounded-2xl border border-border bg-card p-5 shadow-[0_16px_40px_-28px_rgba(11,31,51,0.65)]">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#3e4f46] dark:text-white/70">{label}</p>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0b1f33] text-[#d6f34a]">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar text-brand">
           <Icon className="h-4 w-4" />
         </div>
       </div>
       <p className="mt-3 font-display text-3xl font-semibold tabular-nums tracking-tight">{value}</p>
-      <p className={`mt-1 text-sm ${detailClass || "text-[#5c6b62] dark:text-white/55"}`}>{detail}</p>
+      <p className={`mt-1 text-sm ${detailClass || "text-muted-foreground"}`}>{detail}</p>
       {typeof meter === "number" && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#e7ece2] dark:bg-white/10">
-          <div className="h-full rounded-full bg-[#b6e234]" style={{ width: `${meter}%` }} />
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div className="h-full rounded-full bg-brand" style={{ width: `${meter}%` }} />
         </div>
       )}
     </article>

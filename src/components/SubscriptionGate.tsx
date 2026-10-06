@@ -144,7 +144,7 @@ export default function SubscriptionGate({ children }: { children: React.ReactNo
               <ul className="mt-4 flex-1 space-y-2">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                     {f}
                   </li>
                 ))}

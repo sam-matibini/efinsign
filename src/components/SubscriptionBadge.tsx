@@ -42,7 +42,7 @@ export function SubscriptionBadge() {
   if (!subscription.loading && subscription.subscribed) {
     const label = planName ?? "Subscribed";
     return (
-      <Badge className="gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+      <Badge className="gap-1.5 bg-success/10 text-success border-success/20">
         {subscription.trialing ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
         {label} · {subscription.trialing ? "Trial" : "Active"}
       </Badge>
