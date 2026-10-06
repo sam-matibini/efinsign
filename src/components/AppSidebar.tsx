@@ -30,17 +30,35 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-blue-500" },
-  { title: "Documents", url: "/documents", icon: FileText, color: "text-emerald-500" },
-  { title: "New Document", url: "/documents/new", icon: FilePlus, color: "text-orange-500" },
-  { title: "Fill & Sign", url: "/documents/new", icon: PenTool, color: "text-violet-500" },
-  { title: "PDF Editor", url: "/pdf-editor", icon: FilePenLine, color: "text-cyan-500" },
-  { title: "Request e-Signatures", url: "/documents/new", icon: Send, color: "text-rose-500" },
-  { title: "Clients", url: "/clients", icon: Users, color: "text-amber-500" },
-  { title: "Templates", url: "/templates", icon: FolderOpen, color: "text-teal-500" },
-  { title: "Admin", url: "/admin", icon: ShieldCheck, color: "text-red-500" },
-  { title: "Settings", url: "/settings/organization", icon: Settings, color: "text-slate-500" },
+  { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard, color: "text-blue-500" },
+  { id: "documents", title: "Documents", url: "/documents", icon: FileText, color: "text-emerald-500" },
+  { id: "new", title: "New Document", url: "/documents/new", icon: FilePlus, color: "text-orange-500" },
+  { id: "fill", title: "Fill & Sign", url: "/documents/new?flow=fill", icon: PenTool, color: "text-violet-500" },
+  { id: "editor", title: "PDF Editor", url: "/pdf-editor", icon: FilePenLine, color: "text-cyan-500" },
+  { id: "request", title: "Request e-Signatures", url: "/documents/new?flow=request", icon: Send, color: "text-rose-500" },
+  { id: "clients", title: "Clients", url: "/clients", icon: Users, color: "text-amber-500" },
+  { id: "templates", title: "Templates", url: "/templates", icon: FolderOpen, color: "text-teal-500" },
+  { id: "admin", title: "Admin", url: "/admin", icon: ShieldCheck, color: "text-red-500" },
+  { id: "settings", title: "Settings", url: "/settings/organization", icon: Settings, color: "text-slate-500" },
 ];
+
+/** One sidebar tab is highlighted. Shared routes are split by the flow query. */
+export function activeSidebarItem(pathname: string, search: string): string {
+  const flow = new URLSearchParams(search).get("flow");
+  if (pathname === "/") return "dashboard";
+  if (pathname === "/documents/new") {
+    if (flow === "fill") return "fill";
+    if (flow === "request") return "request";
+    return "new";
+  }
+  if (pathname.endsWith("/edit") || pathname.startsWith("/pdf-editor")) return "editor";
+  if (pathname === "/documents" || pathname.startsWith("/documents/")) return "documents";
+  if (pathname.startsWith("/clients")) return "clients";
+  if (pathname.startsWith("/templates")) return "templates";
+  if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/settings")) return "settings";
+  return "";
+}
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
@@ -68,7 +86,7 @@ export function AppSidebar() {
     setCreating(false);
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const activeId = activeSidebarItem(location.pathname, location.search);
 
   const filteredOrgs = orgs.filter((org) =>
     org.name.toLowerCase().includes(orgSearch.toLowerCase())
@@ -162,9 +180,9 @@ export function AppSidebar() {
               {mainItems
                 .filter((item) => item.title !== "Admin" || isPlatformAdmin)
                 .map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url} end={item.url === "/"} className="hover:bg-sidebar-accent/50 py-3 border-l-2 border-transparent" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-[#d6f34a]">
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton asChild isActive={activeId === item.id}>
+                    <NavLink to={item.url} end isActiveOverride={activeId === item.id} className="hover:bg-sidebar-accent/50 py-3 border-l-2 border-transparent" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium border-[#d6f34a]">
                       <item.icon className={`mr-3 h-5 w-5 ${item.color}`} />
                       {!collapsed && <span className="text-sm">{item.title}</span>}
                     </NavLink>

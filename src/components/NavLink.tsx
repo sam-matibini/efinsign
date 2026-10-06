@@ -6,17 +6,21 @@ interface NavLinkCompatProps extends Omit<NavLinkProps, "className"> {
   className?: string;
   activeClassName?: string;
   pendingClassName?: string;
+  /** When set, this decides the highlight instead of the router's path match. */
+  isActiveOverride?: boolean;
 }
 
 const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(
-  ({ className, activeClassName, pendingClassName, to, ...props }, ref) => {
+  ({ className, activeClassName, pendingClassName, to, isActiveOverride, ...props }, ref) => {
     return (
       <RouterNavLink
         ref={ref}
         to={to}
-        className={({ isActive, isPending }) =>
-          cn(className, isActive && activeClassName, isPending && pendingClassName)
-        }
+        aria-current={isActiveOverride === true ? "page" : isActiveOverride === false ? null : undefined}
+        className={({ isActive, isPending }) => {
+          const active = isActiveOverride ?? isActive;
+          return cn(className, active && activeClassName, isPending && pendingClassName);
+        }}
         {...props}
       />
     );
