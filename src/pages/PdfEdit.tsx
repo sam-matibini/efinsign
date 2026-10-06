@@ -445,9 +445,12 @@ export default function PdfEdit() {
             {pages.map((pageState, index) => {
               if (pageState.deleted) return null;
               const drawingAnn = annotations.find((a) => a.type === "drawing" && a.pageIndex === index) as DrawingAnnotation | undefined;
+              const visiblePage = pages.slice(0, index + 1).filter((p) => !p.deleted).length;
+              const visibleTotal = pages.filter((p) => !p.deleted).length;
+              const nextPage = pages.findIndex((p, i) => i > index && !p.deleted);
               return (
+                <div key={`${pageState.pageNum}-${index}`} className="flex flex-col items-center">
                 <div
-                  key={`${pageState.pageNum}-${index}`}
                   data-editor-page={index}
                   className={`relative inline-block shadow-md ${activePageIndex === index ? "ring-2 ring-primary" : ""}`}
                   onClick={(e) => handlePageClick(index, e)}
@@ -534,17 +537,15 @@ export default function PdfEdit() {
                   )}
                 </div>
                 <PageDemarcator
-                  page={pages.slice(0, index + 1).filter((p) => !p.deleted).length}
-                  total={pages.filter((p) => !p.deleted).length}
+                  page={visiblePage}
+                  total={visibleTotal}
                   nextLabel="Next page"
-                  onNext={index < pages.length - 1 ? () => {
-                    const next = pages.findIndex((p, i) => i > index && !p.deleted);
-                    if (next >= 0) {
-                      setActivePageIndex(next);
-                      document.querySelector(`[data-editor-page="${next}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }
+                  onNext={nextPage >= 0 ? () => {
+                    setActivePageIndex(nextPage);
+                    document.querySelector(`[data-editor-page="${nextPage}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
                   } : undefined}
                 />
+                </div>
               );
             })}
           </div>
