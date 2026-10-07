@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, FilePenLine, FileText, Trash2 } from "lucide-react";
+import { Plus, Search, FilePenLine, FileText, Trash2, LayoutGrid, List } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import {
@@ -17,6 +17,17 @@ import {
 import { toast } from "@/hooks/use-toast";
 
 type Document = Tables<"documents">;
+type EditorView = "tiles" | "rows";
+
+const VIEW_KEY = "efinsign-pdf-editor-view";
+
+export function readEditorView(): EditorView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "rows" ? "rows" : "tiles";
+  } catch {
+    return "tiles";
+  }
+}
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
   draft: { label: "Draft", variant: "secondary" },
@@ -33,6 +44,16 @@ export default function PdfEditorLanding() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<EditorView>(readEditorView);
+
+  const chooseView = (next: EditorView) => {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* The choice still applies for this visit. */
+    }
+  };
 
   useEffect(() => {
     if (!user || !currentOrg) return;
@@ -83,16 +104,71 @@ export default function PdfEditorLanding() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search documents..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search documents..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="inline-flex rounded-lg border border-border bg-card p-1" role="group" aria-label="Document layout">
+          <button
+            type="button"
+            aria-pressed={view === "tiles"}
+            aria-label="Tiles"
+            onClick={() => chooseView("tiles")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${view === "tiles" ? "bg-sidebar text-brand" : "text-muted-foreground hover:bg-accent"}`}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Tiles
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === "rows"}
+            aria-label="Rows"
+            onClick={() => chooseView("rows")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${view === "rows" ? "bg-sidebar text-brand" : "text-muted-foreground hover:bg-accent"}`}
+          >
+            <List className="h-4 w-4" />
+            Rows
+          </button>
+        </div>
       </div>
 
+      {view === "rows" ? (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          {loading ? (
+            <div className="px-5 py-12 text-center text-muted-foreground">Loading...</div>
+          ) : filtered.length === 0 ? (
+            <EmptyEditorState onUpload={() => navigate("/documents/new")} hasDocuments={documents.length > 0} />
+          ) : (
+            <ul>
+              {filtered.map((doc) => (
+                <li key={doc.id} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:px-5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sidebar text-brand">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{doc.title}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(doc.updated_at), "MMM d, yyyy")}</p>
+                  </div>
+                  <Badge variant={statusConfig[doc.status]?.variant || "secondary"}>
+                    {statusConfig[doc.status]?.label || doc.status}
+                  </Badge>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate(`/documents/${doc.id}/edit`)}>
+                    <FilePenLine className="h-4 w-4" />
+                    Edit PDF
+                  </Button>
+                  <DeleteDocumentButton title={doc.title} onDelete={() => handleDelete(doc)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading ? (
           <div className="col-span-full text-center py-12 text-muted-foreground">Loading...</div>
@@ -161,6 +237,47 @@ export default function PdfEditorLanding() {
           ))
         )}
       </div>
+      )}
     </div>
+  );
+}
+
+function EmptyEditorState({ onUpload, hasDocuments }: { onUpload: () => void; hasDocuments: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <FileText className="mb-4 h-12 w-12 text-muted-foreground/50" />
+      <p className="text-lg text-muted-foreground">{hasDocuments ? "No documents match" : "No documents with PDF files"}</p>
+      <p className="mt-1 text-sm text-muted-foreground/70">
+        {hasDocuments ? "Try a different search." : "Upload a document to start editing"}
+      </p>
+      {!hasDocuments && (
+        <Button onClick={onUpload} className="mt-4 gap-2">
+          <Plus className="h-4 w-4" />
+          Upload New
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function DeleteDocumentButton({ title, onDelete }: { title: string; onDelete: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${title}`}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete document?</AlertDialogTitle>
+          <AlertDialogDescription>This will permanently delete "{title}" and all associated data.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={onDelete}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

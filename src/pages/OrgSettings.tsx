@@ -65,6 +65,20 @@ interface ApiKey {
   revoked_at: string | null;
 }
 
+async function invokeError(error: unknown): Promise<string> {
+  const err = error as { message?: string; context?: { clone?: () => { json: () => Promise<unknown> }; json?: () => Promise<unknown> } };
+  try {
+    const response = err.context?.clone?.() ?? err.context;
+    const body = await response?.json?.() as { error?: { message?: string } | string; message?: string } | undefined;
+    const nested = body?.error;
+    const message = typeof nested === "string" ? nested : nested?.message || body?.message;
+    if (message && message.trim()) return message;
+  } catch {
+    /* Keep the client message when the function body is not JSON. */
+  }
+  return err.message || "Request failed";
+}
+
 const AVAILABLE_SCOPES = [
   { value: "documents:read", label: "Read documents" },
   { value: "documents:write", label: "Create & modify documents" },
@@ -446,11 +460,15 @@ export default function OrgSettings() {
     if (!currentOrg) return;
     setLoadingKeys(true);
     try {
-      const { data, error } = await supabase.functions.invoke("api-keys-list", { body: {} });
+      const { data, error } = await supabase
+        .from("api_keys")
+        .select("id, name, key_prefix, mode, scopes, last_used_at, usage_count, usage_limit, created_at, revoked_at")
+        .eq("organization_id", currentOrg.id)
+        .order("created_at", { ascending: false });
       if (error) {
-        toast.error(error.message || "Failed to load API keys");
-      } else if (data?.data) {
-        setApiKeys(data.data as ApiKey[]);
+        toast.error(error.message || "Could not load API keys");
+      } else {
+        setApiKeys((data || []) as ApiKey[]);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to load API keys");
@@ -463,10 +481,10 @@ export default function OrgSettings() {
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke("api-keys-generate", {
-        body: { name: keyName.trim(), scopes: selectedScopes },
+        body: { name: keyName.trim(), scopes: selectedScopes, organization_id: currentOrg?.id },
       });
       if (error) {
-        toast.error(error.message || "Failed to generate key");
+        toast.error(await invokeError(error));
       } else if (data?.data?.key) {
         setGeneratedKey(data.data.key);
         setKeyName("");
@@ -495,10 +513,10 @@ export default function OrgSettings() {
     setRevoking(true);
     try {
       const { data, error } = await supabase.functions.invoke("api-keys-revoke", {
-        body: { key_id: revokeId },
+        body: { key_id: revokeId, organization_id: currentOrg?.id },
       });
       if (error) {
-        toast.error(error.message || "Failed to revoke key");
+        toast.error(await invokeError(error));
       } else {
         toast.success("API key revoked");
         fetchApiKeys();

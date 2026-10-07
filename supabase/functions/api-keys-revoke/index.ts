@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, corsPreflight } from "../_shared/cors.ts";
 import { validateSupabaseJwt } from "../_shared/auth.ts";
 import { errorResponse, handleError } from "../_shared/errors.ts";
+import { isResponse, memberOrganization } from "../_shared/memberOrg.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return corsPreflight();
@@ -21,15 +22,8 @@ Deno.serve(async (req) => {
       return errorResponse(400, "validation_error", "key_id is required");
     }
 
-    const { data: member } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", userId)
-      .single();
-
-    if (!member) {
-      return errorResponse(400, "no_organization", "User is not a member of any organization");
-    }
+    const member = await memberOrganization(supabase, userId, body.organization_id);
+    if (isResponse(member)) return member;
 
     const { error } = await supabase
       .from("api_keys")

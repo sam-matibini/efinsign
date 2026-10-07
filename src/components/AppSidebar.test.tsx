@@ -38,6 +38,7 @@ describe("activeSidebarItem", () => {
     expect(activeSidebarItem("/documents/new", "?flow=request")).toBe("request");
     expect(activeSidebarItem("/documents/new", "?template=abc")).toBe("new");
     expect(activeSidebarItem("/", "")).toBe("dashboard");
+    expect(activeSidebarItem("/documents", "")).toBe("documents");
     expect(activeSidebarItem("/documents/abc", "")).toBe("documents");
   });
 });
@@ -52,6 +53,12 @@ describe("AppSidebar", () => {
     renderAt("/documents/new?flow=fill");
     expect(highlighted()).toEqual(["Fill & Sign"]);
     expect(screen.getByRole("link", { name: "Fill & Sign" })).toHaveAttribute("href", "/documents/new?flow=fill");
+  });
+
+  it("highlights Documents on the documents library", () => {
+    renderAt("/documents");
+    expect(highlighted()).toEqual(["Documents"]);
+    expect(screen.getByRole("link", { name: "Documents" })).toHaveAttribute("href", "/documents");
   });
 
   it("highlights only Request e-Signatures for that flow", () => {
