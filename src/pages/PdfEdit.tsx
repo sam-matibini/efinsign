@@ -2,17 +2,18 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 import PdfAnnotationCanvas from "@/components/PdfAnnotationCanvas";
 import PdfPageThumbnails from "@/components/PdfPageThumbnails";
 import PdfEditorToolbar from "@/components/pdf-editor/PdfEditorToolbar";
-import AnnotationOverlay from "@/components/pdf-editor/AnnotationOverlay";
+import AnnotationOverlay, { annotationBox } from "@/components/pdf-editor/AnnotationOverlay";
 import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
+import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
-import type { Annotation, DrawingAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
+import type { Annotation, DrawingAnnotation, TextAnnotation, ToolMode, ShapeType, PageState, TextAlign } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
+import { alignRectToPage, clampRect, defaultTextBoxHeight, DEFAULT_TEXT_BOX_WIDTH, nudgeRect } from "@/lib/textLayout";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -76,25 +77,10 @@ export default function PdfEdit() {
     });
   }, [syncUndoRedoState]);
 
-  // Keyboard shortcuts for undo/redo
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        e.preventDefault();
-        if (e.shiftKey) redo(); else undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
-        e.preventDefault();
-        redo();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
-
   // Tool state
   const [tool, setTool] = useState<ToolMode>("select");
   const [fontSize, setFontSize] = useState(14);
+  const [textAlign, setTextAlign] = useState<TextAlign>("left");
   const [drawColor, setDrawColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
@@ -108,15 +94,88 @@ export default function PdfEdit() {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [editingText, setEditingText] = useState<{ pageIndex: number; x: number; y: number } | null>(null);
-  const [textValue, setTextValue] = useState("");
+  const [editingText, setEditingText] = useState<{
+    id?: string;
+    pageIndex: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    align: TextAlign;
+  } | null>(null);
 
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const renderTasksRef = useRef<Map<number, any>>(new Map());
 
+  const pageMetrics = useCallback((pageNum: number) => {
+    const c = canvasRefs.current.get(pageNum);
+    return { w: c?.width || 800, h: c?.height || 1100 };
+  }, []);
+
+  const nudgeSelected = useCallback((dx: number, dy: number) => {
+    if (!selectedAnnotationId || editingText) return;
+    const ann = annotations.find((a) => a.id === selectedAnnotationId);
+    if (!ann || !("x" in ann)) return;
+    const page = pages[ann.pageIndex];
+    const { w, h } = pageMetrics(page.pageNum);
+    const box = annotationBox(ann);
+    if (!box) return;
+    const next = clampRect({ ...box, x: box.x + dx, y: box.y + dy }, w, h);
+    setAnnotations((prev) => prev.map((a) => a.id === ann.id ? { ...a, x: next.x, y: next.y } as Annotation : a));
+  }, [selectedAnnotationId, editingText, annotations, pages, pageMetrics, setAnnotations]);
+
+  const alignSelectedToPage = useCallback((align: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
+    if (!selectedAnnotationId) return;
+    const ann = annotations.find((a) => a.id === selectedAnnotationId);
+    if (!ann || !("x" in ann)) return;
+    const page = pages[ann.pageIndex];
+    const { w, h } = pageMetrics(page.pageNum);
+    const box = annotationBox(ann);
+    if (!box) return;
+    const next = alignRectToPage(box, align, w, h);
+    setAnnotations((prev) => prev.map((a) => a.id === ann.id ? { ...a, x: next.x, y: next.y } as Annotation : a));
+  }, [selectedAnnotationId, annotations, pages, pageMetrics, setAnnotations]);
+
   // Clear selection when switching tools
   useEffect(() => { setSelectedAnnotationId(null); }, [tool]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (typing || editingText || !selectedAnnotationId) return;
+      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const ann = annotations.find((a) => a.id === selectedAnnotationId);
+        if (!ann || !("x" in ann)) return;
+        const page = pages[ann.pageIndex];
+        const { w, h } = pageMetrics(page.pageNum);
+        const box = annotationBox(ann);
+        if (!box) return;
+        const next = nudgeRect(box, e.key, e.shiftKey, w, h);
+        setAnnotations((prev) => prev.map((a) => a.id === ann.id ? { ...a, x: next.x, y: next.y } as Annotation : a));
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        setAnnotations((prev) => prev.filter((a) => a.id !== selectedAnnotationId));
+        setSelectedAnnotationId(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo, editingText, selectedAnnotationId, annotations, pages, pageMetrics, setAnnotations]);
 
   // Load document
   useEffect(() => {
@@ -195,10 +254,7 @@ export default function PdfEdit() {
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
-      if (tool === "text") {
-        setEditingText({ pageIndex, x, y });
-        setTextValue("");
-      } else if (tool === "stamp" && selectedStamp) {
+      if (tool === "stamp" && selectedStamp) {
         setAnnotations((prev) => [...prev, { type: "stamp", id: genId(), pageIndex, x, y, label: selectedStamp }]);
       } else if (tool === "checkmark") {
         setAnnotations((prev) => [...prev, { type: "checkmark", id: genId(), pageIndex, x, y, size: checkmarkSize }]);
@@ -209,15 +265,95 @@ export default function PdfEdit() {
     [tool, selectedStamp, checkmarkSize, pendingImage, pages, setAnnotations]
   );
 
+  const startTextBox = useCallback((pageIndex: number, x: number, y: number, width?: number, height?: number) => {
+    if (pages[pageIndex]?.deleted) return;
+    const page = pages[pageIndex];
+    const metrics = pageMetrics(page.pageNum);
+    const w = width && width > 20 ? width : DEFAULT_TEXT_BOX_WIDTH;
+    const h = height && height > 20 ? height : defaultTextBoxHeight(fontSize);
+    const box = clampRect({ x, y, w, h }, metrics.w, metrics.h);
+    setEditingText({
+      pageIndex,
+      x: box.x,
+      y: box.y,
+      width: box.w,
+      height: box.h,
+      text: "",
+      align: textAlign,
+    });
+  }, [pages, pageMetrics, fontSize, textAlign]);
+
   const confirmText = useCallback(() => {
-    if (!editingText || !textValue.trim()) { setEditingText(null); return; }
-    setAnnotations((prev) => [
-      ...prev,
-      { type: "text", id: genId(), pageIndex: editingText.pageIndex, x: editingText.x, y: editingText.y, text: textValue.trim(), fontSize },
-    ]);
+    if (!editingText) return;
+    const trimmed = editingText.text.replace(/\s+$/, "");
+    if (!trimmed.trim()) {
+      setEditingText(null);
+      return;
+    }
+    if (editingText.id) {
+      setAnnotations((prev) => prev.map((a) => a.id === editingText.id ? {
+        ...a,
+        type: "text",
+        x: editingText.x,
+        y: editingText.y,
+        width: editingText.width,
+        height: editingText.height,
+        text: trimmed,
+        fontSize,
+        align: editingText.align,
+      } as TextAnnotation : a));
+    } else {
+      setAnnotations((prev) => [
+        ...prev,
+        {
+          type: "text",
+          id: genId(),
+          pageIndex: editingText.pageIndex,
+          x: editingText.x,
+          y: editingText.y,
+          width: editingText.width,
+          height: editingText.height,
+          text: trimmed,
+          fontSize,
+          align: editingText.align,
+        },
+      ]);
+    }
+    setTextAlign(editingText.align);
     setEditingText(null);
-    setTextValue("");
-  }, [editingText, textValue, fontSize, setAnnotations]);
+  }, [editingText, fontSize, setAnnotations]);
+
+  const handleEditText = useCallback((ann: TextAnnotation) => {
+    setTool("text");
+    setFontSize(ann.fontSize);
+    setTextAlign(ann.align ?? "left");
+    setEditingText({
+      id: ann.id,
+      pageIndex: ann.pageIndex,
+      x: ann.x,
+      y: ann.y,
+      width: ann.width ?? DEFAULT_TEXT_BOX_WIDTH,
+      height: ann.height ?? defaultTextBoxHeight(ann.fontSize),
+      text: ann.text,
+      align: ann.align ?? "left",
+    });
+  }, []);
+
+  const applyTextAlign = useCallback((align: TextAlign) => {
+    setTextAlign(align);
+    if (editingText) {
+      setEditingText((prev) => prev ? { ...prev, align } : prev);
+      return;
+    }
+    if (!selectedAnnotationId) return;
+    setAnnotations((prev) => prev.map((a) => a.id === selectedAnnotationId && a.type === "text" ? { ...a, align } : a));
+  }, [editingText, selectedAnnotationId, setAnnotations]);
+
+  const applyFontSize = useCallback((size: number) => {
+    setFontSize(size);
+    if (!selectedAnnotationId || editingText) return;
+    setAnnotations((prev) => prev.map((a) => a.id === selectedAnnotationId && a.type === "text" ? { ...a, fontSize: size } : a));
+  }, [selectedAnnotationId, editingText, setAnnotations]);
 
   const handleDrawingComplete = useCallback((pageIndex: number, imageData: string) => {
     setAnnotations((prev) => {
@@ -282,12 +418,14 @@ export default function PdfEdit() {
     return <div className="text-center py-12 text-muted-foreground">Loading document...</div>;
   }
 
+  const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId) ?? null;
+
   return (
     <div className="animate-fade-in flex flex-col h-[calc(100vh-4rem)]">
       <PdfEditorToolbar
         docTitle={doc.title}
         tool={tool} setTool={setTool}
-        fontSize={fontSize} setFontSize={setFontSize}
+        fontSize={fontSize} setFontSize={applyFontSize}
         drawColor={drawColor} setDrawColor={setDrawColor}
         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
         selectedStamp={selectedStamp} setSelectedStamp={setSelectedStamp}
@@ -303,6 +441,11 @@ export default function PdfEdit() {
         onBack={() => navigate(`/documents/${id}`)}
         onUndo={undo} onRedo={redo}
         canUndo={canUndo} canRedo={canRedo}
+        textAlign={textAlign}
+        setTextAlign={applyTextAlign}
+        selectedAnnotation={selectedAnnotation}
+        onNudgeSelected={nudgeSelected}
+        onAlignSelectedToPage={alignSelectedToPage}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -326,7 +469,10 @@ export default function PdfEdit() {
                 <div
                   key={`${pageState.pageNum}-${index}`}
                   className={`relative inline-block shadow-md ${activePageIndex === index ? "ring-2 ring-primary" : ""}`}
-                  onClick={(e) => handlePageClick(index, e)}
+                  onClick={(e) => {
+                    if (editingText) confirmText();
+                    handlePageClick(index, e);
+                  }}
                   style={{ cursor: tool === "text" || tool === "stamp" || tool === "checkmark" || tool === "image" ? "crosshair" : undefined }}
                 >
                   <canvas
@@ -360,28 +506,45 @@ export default function PdfEdit() {
                     previewOpacity={0.2}
                   />
 
+                  <DragDrawCanvas
+                    active={tool === "text" && !editingText}
+                    onComplete={(x, y, w, h) => startTextBox(index, x, y, w, h)}
+                    onPoint={(x, y) => startTextBox(index, x, y)}
+                    previewColor="#3b82f6"
+                    previewOpacity={0.12}
+                  />
+
                   <AnnotationOverlay
                     annotations={annotations}
                     pageIndex={index}
                     tool={tool}
                     selectedId={selectedAnnotationId}
+                    hiddenId={editingText?.id ?? null}
                     onSelect={setSelectedAnnotationId}
                     onDelete={handleDeleteAnnotation}
                     onUpdate={handleUpdateAnnotation}
+                    onEditText={handleEditText}
                   />
 
                   {editingText?.pageIndex === index && (
-                    <div className="absolute z-20" style={{ left: editingText.x, top: editingText.y }}>
-                      <Input
-                        autoFocus
-                        value={textValue}
-                        onChange={(e) => setTextValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") confirmText(); if (e.key === "Escape") setEditingText(null); }}
-                        onBlur={confirmText}
-                        className="h-7 text-xs min-w-[120px] w-auto"
-                        style={{ fontSize }}
-                      />
-                    </div>
+                    <TextBoxEditor
+                      x={editingText.x}
+                      y={editingText.y}
+                      width={editingText.width}
+                      height={editingText.height}
+                      text={editingText.text}
+                      fontSize={fontSize}
+                      align={editingText.align}
+                      pageWidth={pageMetrics(pageState.pageNum).w}
+                      pageHeight={pageMetrics(pageState.pageNum).h}
+                      otherRects={annotations
+                        .filter((a) => a.pageIndex === index && a.id !== editingText.id)
+                        .map(annotationBox)
+                        .filter((r): r is NonNullable<typeof r> => r !== null)}
+                      onChange={(next) => setEditingText((prev) => prev ? { ...prev, ...next } : prev)}
+                      onCommit={confirmText}
+                      onCancel={() => setEditingText(null)}
+                    />
                   )}
                 </div>
               );

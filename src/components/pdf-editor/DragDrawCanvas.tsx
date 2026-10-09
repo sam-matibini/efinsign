@@ -3,11 +3,12 @@ import { useRef, useState, useCallback } from "react";
 interface DragDrawCanvasProps {
   active: boolean;
   onComplete: (x: number, y: number, width: number, height: number) => void;
+  onPoint?: (x: number, y: number) => void;
   previewColor?: string;
   previewOpacity?: number;
 }
 
-export default function DragDrawCanvas({ active, onComplete, previewColor = "#fde047", previewOpacity = 0.3 }: DragDrawCanvasProps) {
+export default function DragDrawCanvas({ active, onComplete, onPoint, previewColor = "#fde047", previewOpacity = 0.3 }: DragDrawCanvasProps) {
   const [rect, setRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -33,9 +34,11 @@ export default function DragDrawCanvas({ active, onComplete, previewColor = "#fd
     const h = Math.abs(rect.endY - rect.startY);
     if (w > 5 && h > 5) {
       onComplete(x, y, w, h);
+    } else if (onPoint) {
+      onPoint(rect.startX, rect.startY);
     }
     setRect(null);
-  }, [rect, onComplete]);
+  }, [rect, onComplete, onPoint]);
 
   if (!active) return null;
 

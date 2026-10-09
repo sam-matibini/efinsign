@@ -6,9 +6,10 @@ import StampPicker from "@/components/StampPicker";
 import {
   ArrowLeft, Type, Paintbrush, Stamp, Save, Loader2, MousePointer,
   Check, Highlighter, Shapes, ImageIcon, Square, Circle, Minus,
-  Undo2, Redo2
+  Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, ArrowUp, ArrowDown, ArrowRight,
+  AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
 } from "lucide-react";
-import type { ToolMode, ShapeType } from "./types";
+import type { ToolMode, ShapeType, TextAlign, Annotation } from "./types";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -51,6 +52,11 @@ interface PdfEditorToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  textAlign: TextAlign;
+  setTextAlign: (a: TextAlign) => void;
+  selectedAnnotation?: Annotation | null;
+  onNudgeSelected?: (dx: number, dy: number) => void;
+  onAlignSelectedToPage?: (align: "left" | "center" | "right" | "top" | "middle" | "bottom") => void;
 }
 
 export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
@@ -63,6 +69,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     shapeFillColor, setShapeFillColor, shapeStrokeWidth, setShapeStrokeWidth,
     onImageUpload, saving, onSave, onBack,
     onUndo, onRedo, canUndo, canRedo,
+    textAlign, setTextAlign, selectedAnnotation, onNudgeSelected, onAlignSelectedToPage,
   } = props;
 
   const tools: { mode: ToolMode; icon: any; label: string }[] = [
@@ -109,8 +116,8 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
       </div>
 
       {/* Text options */}
-      {tool === "text" && (
-        <div className="flex items-center gap-2">
+      {(tool === "text" || selectedAnnotation?.type === "text") && (
+        <div className="flex items-center gap-2 flex-wrap">
           <Label className="text-xs">Size:</Label>
           <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
             <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
@@ -120,6 +127,60 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
               ))}
             </SelectContent>
           </Select>
+          <span className="text-xs text-muted-foreground hidden sm:inline">Helvetica</span>
+          <div className="flex items-center">
+            {([
+              ["left", AlignLeft, "Align text left"],
+              ["center", AlignCenter, "Align text center"],
+              ["right", AlignRight, "Align text right"],
+            ] as const).map(([value, Icon, title]) => (
+              <Button
+                key={value}
+                variant={textAlign === value ? "default" : "ghost"}
+                size="sm"
+                className="h-8 w-8 p-0"
+                title={title}
+                onClick={() => setTextAlign(value)}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </Button>
+            ))}
+          </div>
+          {selectedAnnotation && onNudgeSelected && (
+            <div className="flex items-center">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Move up" onClick={() => onNudgeSelected(0, -1)}>
+                <ArrowUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Move down" onClick={() => onNudgeSelected(0, 1)}>
+                <ArrowDown className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Move left" onClick={() => onNudgeSelected(-1, 0)}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Move right" onClick={() => onNudgeSelected(1, 0)}>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+          {selectedAnnotation && onAlignSelectedToPage && (
+            <div className="flex items-center">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Stick left" onClick={() => onAlignSelectedToPage("left")}>
+                <AlignLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Stick center" onClick={() => onAlignSelectedToPage("center")}>
+                <AlignHorizontalJustifyCenter className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Stick right" onClick={() => onAlignSelectedToPage("right")}>
+                <AlignRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Stick middle" onClick={() => onAlignSelectedToPage("middle")}>
+                <AlignVerticalJustifyCenter className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+          <span className="text-[11px] text-muted-foreground hidden md:inline">
+            Wraps inside the box. Double-click to edit.
+          </span>
         </div>
       )}
 

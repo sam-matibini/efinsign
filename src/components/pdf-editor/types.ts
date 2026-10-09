@@ -1,6 +1,10 @@
+import type { TextAlign } from "@/lib/textLayout";
+
 export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image";
 
 export type ShapeType = "rect" | "circle" | "line";
+
+export type { TextAlign };
 
 interface BaseAnnotation {
   id: string;
@@ -13,6 +17,9 @@ export interface TextAnnotation extends BaseAnnotation {
   type: "text";
   text: string;
   fontSize: number;
+  width?: number;
+  height?: number;
+  align?: TextAlign;
 }
 
 export interface StampAnnotation extends BaseAnnotation {

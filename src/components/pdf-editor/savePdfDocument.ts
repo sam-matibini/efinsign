@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { alignedLineX, defaultTextBoxHeight, DEFAULT_TEXT_BOX_WIDTH, wrapText } from "@/lib/textLayout";
 import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation } from "./types";
 
 function hexToRgb(hex: string) {
@@ -46,7 +47,22 @@ export async function savePdfDocument(
     switch (ann.type) {
       case "text": {
         const ta = ann as TextAnnotation;
-        page.drawText(ta.text, { x: toPdfX(ta.x), y: toPdfY(ta.y), size: ta.fontSize, font, color: rgb(0, 0, 0) });
+        const boxW = ta.width ?? DEFAULT_TEXT_BOX_WIDTH;
+        const boxH = ta.height ?? defaultTextBoxHeight(ta.fontSize);
+        const size = ta.fontSize * (pw / cw);
+        const maxWidth = Math.max(8, boxW * (pw / cw));
+        const lines = wrapText(ta.text, maxWidth, (s) => font.widthOfTextAtSize(s, size));
+        const lineHeight = size * 1.25;
+        const align = ta.align ?? "left";
+        const topBaseline = toPdfY(ta.y) - size * 0.9;
+        const minY = toPdfY(ta.y + boxH);
+        lines.forEach((line, i) => {
+          const y = topBaseline - i * lineHeight;
+          if (y < minY - size * 0.2) return;
+          const lineWidth = font.widthOfTextAtSize(line, size);
+          const x = alignedLineX(toPdfX(ta.x), maxWidth, lineWidth, align);
+          page.drawText(line, { x, y, size, font, color: rgb(0, 0, 0) });
+        });
         break;
       }
       case "stamp": {
