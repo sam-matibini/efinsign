@@ -1,0 +1,31 @@
+{
+  "name": "efinsign-api",
+  "version": "1.0.0",
+  "description": "Official TypeScript/JavaScript SDK for the eFinSign e-signature API",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["efinsign", "esignature", "signing", "documents", "api", "sdk"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/efinsign/efinsign-api-js"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0"
+  }
+}

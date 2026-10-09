@@ -1,0 +1,1197 @@
+openapi: "3.1.0"
+info:
+  title: eFinSign API
+  version: "1.0.0"
+  description: |
+    Programmatic access to eFinSign's e-signature platform. Create documents, add signers, send for
+    signing, and track completion — all via REST.
+
+    ## Authentication
+    All endpoints (except `/status` and `/`) require an API key passed as a Bearer token:
+    ```
+    Authorization: Bearer efsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    ```
+
+    ## Environments
+    | Mode | Key Prefix | Emails | PDFs | Limit |
+    |------|-----------|--------|------|-------|
+    | Production key. Real emails, clean PDFs, 1000 req/min |
+    | Production | `efsk_live_` | Real (Resend) | Clean | Plan-based, 1000 req/min |
+
+    ## Pagination
+    List endpoints support `?page=1&per_page=50`. Response includes `meta` with `total`, `total_pages`.
+
+    ## Errors
+    ```json
+    { "error": { "code": "not_found", "message": "Document not found" } }
+    ```
+
+  contact:
+    name: eFinSign
+    url: https://efinsign.ca
+    email: hello@efinsign.ca
+
+servers:
+  - url: https://api.efinsign.ca/functions/v1/api
+    description: Production (custom domain)
+  - url: https://cavdivfhszrnhliyafze.supabase.co/functions/v1/api
+    description: Production (direct Supabase)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Documents
+    description: Create, manage, and send documents for signing
+  - name: Signers
+    description: Manage signers and signature fields on documents
+  - name: Fields
+    description: Place and manage form fields for signers
+  - name: Templates
+    description: Reusable document templates
+  - name: Embed
+    description: Embeddable signing widget integration
+  - name: Organization
+    description: Organization profile and usage
+  - name: Clients
+    description: Address book of contacts
+  - name: Meta
+    description: Health check and API metadata
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════
+  # META
+  # ═══════════════════════════════════════════════════════════════════
+  /:
+    get:
+      tags: [Meta]
+      summary: API information
+      security: []
+      responses:
+        "200":
+          description: API metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiInfo"
+
+  /status:
+    get:
+      tags: [Meta]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiInfo"
+
+  /openapi.json:
+    get:
+      tags: [Meta]
+      summary: OpenAPI specification
+      security: []
+      responses:
+        "200":
+          description: This document
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DOCUMENTS
+  # ═══════════════════════════════════════════════════════════════════
+  /documents:
+    post:
+      tags: [Documents]
+      summary: Upload and create a document
+      description: Upload a PDF file and create a new draft document.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to upload
+                title:
+                  type: string
+                  description: Document title
+                  example: "Service Agreement 2026"
+      responses:
+        "201":
+          description: Document created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags: [Documents]
+      summary: List documents
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, pending, completed, expired, declined]
+          description: Filter by document status
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by title (case-insensitive)
+      responses:
+        "200":
+          description: Paginated list of documents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListResponse"
+
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get a document
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document with signers and fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [Documents]
+      summary: Update a document
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+
+    delete:
+      tags: [Documents]
+      summary: Delete a document
+      description: Only draft documents can be deleted.
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Cannot delete non-draft documents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /documents/{id}/download:
+    get:
+      tags: [Documents]
+      summary: Download a document PDF
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [original, signed]
+            default: original
+      responses:
+        "200":
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /documents/{id}/audit-log:
+    get:
+      tags: [Documents]
+      summary: Get audit log
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Audit trail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogResponse"
+
+  /documents/{id}/send:
+    post:
+      tags: [Documents]
+      summary: Send document for signing
+      description: Changes status from draft to pending. Requires at least one signer.
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "400":
+          description: No signers or invalid status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /documents/{id}/void:
+    post:
+      tags: [Documents]
+      summary: Void a pending document
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document voided
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      success: { type: boolean }
+                      status: { type: string }
+
+  /documents/{id}/remind:
+    post:
+      tags: [Documents]
+      summary: Send reminder to pending signers
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Reminder sent (or logged in sandbox)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      success: { type: boolean }
+                      sandbox: { type: boolean }
+                      message: { type: string }
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SIGNERS
+  # ═══════════════════════════════════════════════════════════════════
+  /documents/{id}/signers:
+    post:
+      tags: [Signers]
+      summary: Add a signer
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  format: email
+                  example: "john@example.com"
+                order:
+                  type: integer
+                  description: Signing order (0 = any order)
+                  default: 0
+                fields:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/FieldInput"
+      responses:
+        "201":
+          description: Signer created with fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignerResponse"
+
+    get:
+      tags: [Signers]
+      summary: List signers
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Signers with their fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignerListResponse"
+
+  /documents/{id}/signers/{signerId}:
+    patch:
+      tags: [Signers]
+      summary: Update a signer
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/SignerId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                order: { type: integer }
+      responses:
+        "200":
+          description: Updated signer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignerResponse"
+
+    delete:
+      tags: [Signers]
+      summary: Remove a signer
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/SignerId"
+      responses:
+        "204":
+          description: Removed
+
+  # ═══════════════════════════════════════════════════════════════════
+  # FIELDS
+  # ═══════════════════════════════════════════════════════════════════
+  /documents/{id}/signers/{signerId}/fields:
+    post:
+      tags: [Fields]
+      summary: Add a field to a signer
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/SignerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldInput"
+      responses:
+        "201":
+          description: Field created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldResponse"
+
+  /documents/{id}/signers/{signerId}/fields/{fieldId}:
+    patch:
+      tags: [Fields]
+      summary: Update a field
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/SignerId"
+        - $ref: "#/components/parameters/FieldId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldUpdateInput"
+      responses:
+        "200":
+          description: Updated field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldResponse"
+
+    delete:
+      tags: [Fields]
+      summary: Remove a field
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/SignerId"
+        - $ref: "#/components/parameters/FieldId"
+      responses:
+        "204":
+          description: Removed
+
+  # ═══════════════════════════════════════════════════════════════════
+  # TEMPLATES
+  # ═══════════════════════════════════════════════════════════════════
+  /templates:
+    post:
+      tags: [Templates]
+      summary: Create a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: "NDA Template"
+                description:
+                  type: string
+                signers:
+                  type: array
+                  items:
+                    type: object
+                  description: Signer definitions (name, email, order)
+                fields:
+                  type: array
+                  items:
+                    type: object
+                  description: Field definitions keyed by signer index
+                tags:
+                  type: array
+                  items:
+                    type: string
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF template file
+                title:
+                  type: string
+                description:
+                  type: string
+                signers:
+                  type: string
+                  description: JSON string of signer array
+                fields:
+                  type: string
+                  description: JSON string of fields array
+                tags:
+                  type: string
+                  description: JSON string of tag array
+      responses:
+        "201":
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateResponse"
+
+    get:
+      tags: [Templates]
+      summary: List templates
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateListResponse"
+
+  /templates/{id}:
+    get:
+      tags: [Templates]
+      summary: Get a template
+      parameters:
+        - $ref: "#/components/parameters/TemplateId"
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateResponse"
+
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      parameters:
+        - $ref: "#/components/parameters/TemplateId"
+      responses:
+        "204":
+          description: Deleted
+
+  /templates/{id}/documents:
+    post:
+      tags: [Templates]
+      summary: Create a document from a template
+      parameters:
+        - $ref: "#/components/parameters/TemplateId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Override the document title
+      responses:
+        "201":
+          description: Document created from template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # EMBED
+  # ═══════════════════════════════════════════════════════════════════
+  /embed/signing-url:
+    post:
+      tags: [Embed]
+      summary: Get embeddable signing URL
+      description: |
+        Returns URLs for embedded or redirect-based signing.
+        Use `signer_id` OR `document_id` + `signer_email`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signer_id:
+                  type: string
+                  format: uuid
+                  description: ID of the signer
+                document_id:
+                  type: string
+                  format: uuid
+                  description: ID of the document
+                signer_email:
+                  type: string
+                  format: email
+                  description: Email of the signer (used with document_id)
+            examples:
+              bySignerId:
+                value: { signer_id: "a1b2c3d4-..." }
+              byDocEmail:
+                value: { document_id: "a1b2c3d4-...", signer_email: "john@example.com" }
+      responses:
+        "200":
+          description: Signing URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        description: Raw signing URL
+                      signing_url:
+                        type: string
+                        description: Full-page signing URL
+                      embed_url:
+                        type: string
+                        description: Embeddable iframe URL
+                      signer_email:
+                        type: string
+                      signer_name:
+                        type: string
+
+  /embed/status/{token}:
+    get:
+      tags: [Embed]
+      summary: Get signing status by token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Signer access token
+      responses:
+        "200":
+          description: Signing status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      signer_status: { type: string }
+                      signed_at: { type: string, nullable: true }
+                      document_status: { type: string }
+                      document_title: { type: string }
+
+  # ═══════════════════════════════════════════════════════════════════
+  # ORGANIZATION
+  # ═══════════════════════════════════════════════════════════════════
+  /organization:
+    get:
+      tags: [Organization]
+      summary: Get organization details
+      responses:
+        "200":
+          description: Organization profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+
+    patch:
+      tags: [Organization]
+      summary: Update organization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationUpdateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+
+  /organization/usage:
+    get:
+      tags: [Organization]
+      summary: Get usage statistics
+      responses:
+        "200":
+          description: Current month usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total_documents: { type: integer }
+                      pending_documents: { type: integer }
+                      api_calls: { type: integer }
+                      api_call_limit: { type: integer }
+
+  # ═══════════════════════════════════════════════════════════════════
+  # CLIENTS
+  # ═══════════════════════════════════════════════════════════════════
+  /clients:
+    post:
+      tags: [Clients]
+      summary: Create a client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientResponse"
+
+    get:
+      tags: [Clients]
+      summary: List clients
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search name, email, or company
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientListResponse"
+
+  /clients/{id}:
+    get:
+      tags: [Clients]
+      summary: Get a client
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: Client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientResponse"
+
+    patch:
+      tags: [Clients]
+      summary: Update a client
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientUpdateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientResponse"
+
+    delete:
+      tags: [Clients]
+      summary: Delete a client
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "204":
+          description: Deleted
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: |
+        API key in format `efsk_live_xxx` (sandbox) or `efsk_live_xxx` (production).
+        Generate keys from Settings → API Keys in the eFinSign dashboard.
+
+  parameters:
+    DocumentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Document ID
+
+    SignerId:
+      name: signerId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Signer ID
+
+    FieldId:
+      name: fieldId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Field ID
+
+    TemplateId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Template ID
+
+    ClientId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Client ID
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+  schemas:
+    ApiInfo:
+      type: object
+      properties:
+        name: { type: string, example: "eFinSign API" }
+        version: { type: string, example: "1.0.0" }
+        docs: { type: string, example: "https://developers.efinsign.ca" }
+        status: { type: string, example: "operational" }
+        timestamp: { type: string, format: date-time }
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        total_pages: { type: integer }
+
+    Document:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status:
+          type: string
+          enum: [draft, pending, completed, expired, declined]
+        file_path: { type: string, nullable: true }
+        signed_file_path: { type: string, nullable: true }
+        organization_id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DocumentResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Document"
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Document"
+        - type: object
+          properties:
+            signers:
+              type: array
+              items:
+                $ref: "#/components/schemas/SignerWithFields"
+            fields:
+              type: array
+              items:
+                $ref: "#/components/schemas/Field"
+
+    DocumentDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/DocumentDetail"
+
+    DocumentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        event_type: { type: string }
+        actor_email: { type: string, nullable: true }
+        actor_ip: { type: string, nullable: true }
+        details: { type: object }
+        created_at: { type: string, format: date-time }
+
+    AuditLogResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+
+    Signer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+        signing_order: { type: integer }
+        status:
+          type: string
+          enum: [pending, viewed, signed, declined]
+        color: { type: string }
+        signed_at: { type: string, format: date-time, nullable: true }
+        decline_reason: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    SignerWithFields:
+      allOf:
+        - $ref: "#/components/schemas/Signer"
+        - type: object
+          properties:
+            fields:
+              type: array
+              items:
+                $ref: "#/components/schemas/Field"
+
+    SignerResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/SignerWithFields"
+
+    SignerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignerWithFields"
+
+    Field:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        signer_id: { type: string, format: uuid }
+        field_type:
+          type: string
+          enum: [signature, initials, name, date, text, checkbox, checkmark, full_name, title]
+        page_number: { type: integer }
+        x: { type: number }
+        y: { type: number }
+        width: { type: number }
+        height: { type: number }
+        value: { type: string, nullable: true }
+        label: { type: string, nullable: true }
+
+    FieldInput:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [signature, initials, name, date, text, checkbox, checkmark, full_name, title]
+          default: signature
+        page:
+          type: integer
+          default: 1
+        x: { type: number, default: 0 }
+        y: { type: number, default: 0 }
+        w: { type: number, default: 200 }
+        h: { type: number, default: 50 }
+        label: { type: string }
+
+    FieldUpdateInput:
+      type: object
+      properties:
+        type: { type: string, enum: [signature, initials, name, date, text, checkbox, checkmark, full_name, title] }
+        page: { type: integer }
+        x: { type: number }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
+        label: { type: string }
+
+    FieldResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Field"
+
+    Template:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        file_path: { type: string, nullable: true }
+        signers: { type: array, items: { type: object } }
+        fields: { type: array, items: { type: object } }
+        tags: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+
+    TemplateResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Template"
+
+    TemplateListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Template"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    Organization:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        postal_code: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        telephone: { type: string, nullable: true }
+        cell_number: { type: string, nullable: true }
+        logo_url: { type: string, nullable: true }
+
+    OrganizationResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Organization"
+
+    OrganizationUpdateInput:
+      type: object
+      properties:
+        name: { type: string }
+        address: { type: string }
+        city: { type: string }
+        postal_code: { type: string }
+        country: { type: string }
+        email: { type: string }
+        telephone: { type: string }
+
+    Client:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, nullable: true }
+        company: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        postal_code: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    ClientInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: "Jane Smith" }
+        email: { type: string, format: email, example: "jane@acmecorp.com" }
+        company: { type: string, example: "Acme Corp" }
+        address: { type: string, example: "123 Main St" }
+        city: { type: string, example: "New York" }
+        country: { type: string, example: "US" }
+        postal_code: { type: string, example: "10001" }
+
+    ClientUpdateInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        company: { type: string }
+        address: { type: string }
+        city: { type: string }
+        country: { type: string }
+        postal_code: { type: string }
+
+    ClientResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Client"
+
+    ClientListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

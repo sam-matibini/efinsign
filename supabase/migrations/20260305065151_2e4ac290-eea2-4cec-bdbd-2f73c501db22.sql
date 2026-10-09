@@ -1,0 +1,2 @@
+DROP POLICY "Admins can add members" ON public.organization_members;
+CREATE POLICY "Admins can add members" ON public.organization_members FOR INSERT TO authenticated WITH CHECK ((user_id = auth.uid()) OR has_org_role(auth.uid(), organization_id, 'admin'::org_role));

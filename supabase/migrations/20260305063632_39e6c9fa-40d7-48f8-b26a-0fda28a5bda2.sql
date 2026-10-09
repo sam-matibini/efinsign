@@ -1,0 +1,1 @@
+ALTER TABLE public.organizations ADD COLUMN city text, ADD COLUMN postal_code text, ADD COLUMN country text;
