@@ -16,7 +16,8 @@ export type ToolMode =
   | "image"
   | "whiteout"
   | "signature"
-  | "sticky";
+  | "sticky"
+  | "comment";
 
 export type ShapeType = "rect" | "rounded" | "circle" | "ellipse" | "line" | "triangle" | "diamond" | "arrow";
 
@@ -88,6 +89,17 @@ export interface ShapeAnnotation extends BaseAnnotation {
   strokeColor: string;
   fillColor: string;
   strokeWidth: number;
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  fontFamily?: EditorFont;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  align?: TextAlign;
+  lineHeight?: number;
+  listStyle?: ListStyle;
 }
 
 export interface ImageAnnotation extends BaseAnnotation {
@@ -119,6 +131,15 @@ export interface StickyNoteAnnotation extends BaseAnnotation {
   color?: string;
 }
 
+export interface CommentAnnotation extends BaseAnnotation {
+  type: "comment";
+  text: string;
+  author: string;
+  color: string;
+  resolved?: boolean;
+  createdAt: string;
+}
+
 export type Annotation =
   | TextAnnotation
   | StampAnnotation
@@ -129,7 +150,8 @@ export type Annotation =
   | ImageAnnotation
   | WhiteoutAnnotation
   | SignatureAnnotation
-  | StickyNoteAnnotation;
+  | StickyNoteAnnotation
+  | CommentAnnotation;
 
 export interface PageState {
   pageNum: number;

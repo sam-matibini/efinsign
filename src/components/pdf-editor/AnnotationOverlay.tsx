@@ -8,7 +8,8 @@ import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
 import { editorFontCss } from "@/lib/editorFonts";
 import { formatDisplayLines } from "@/lib/pendingText";
 import { coverFinish } from "@/lib/editorMarks";
-import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation } from "./types";
+import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation, CommentAnnotation } from "./types";
+import { commentNumber } from "@/lib/editorReview";
 
 type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
@@ -36,6 +37,7 @@ function boxSize(ann: Annotation): { width: number; height: number } | null {
   ) {
     return { width: ann.width, height: ann.height };
   }
+  if (ann.type === "comment") return { width: 28, height: 28 };
   return null;
 }
 
@@ -46,7 +48,7 @@ function isPageDrawTool(tool: ToolMode) {
 }
 
 function isAlwaysInteractive(ann: Annotation) {
-  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp" || ann.type === "drawing" || ann.type === "whiteout";
+  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp" || ann.type === "drawing" || ann.type === "whiteout" || ann.type === "shape" || ann.type === "comment";
 }
 
 interface AnnotationOverlayProps {
@@ -60,10 +62,12 @@ interface AnnotationOverlayProps {
   onEditText?: (ann: TextAnnotation) => void;
   onEditSignature?: (ann: SignatureAnnotation) => void;
   onEditSticky?: (ann: StickyNoteAnnotation) => void;
+  onEditShape?: (ann: ShapeAnnotation) => void;
+  onEditComment?: (ann: CommentAnnotation) => void;
 }
 
 export default function AnnotationOverlay({
-  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky,
+  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky, onEditShape, onEditComment,
 }: AnnotationOverlayProps) {
   const pageRef = useRef<HTMLDivElement>(null);
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex);
@@ -220,7 +224,7 @@ export default function AnnotationOverlay({
         const isSelected = selectedId === ann.id;
         const box = boxSize(ann);
         const interactive = drawingOverPage
-          ? ann.type === "drawing" || ann.type === "whiteout"
+          ? ann.type === "drawing" || ann.type === "whiteout" || ann.type === "shape"
           : (isSelectMode || isAlwaysInteractive(ann));
         const common = {
           position: "absolute" as const,
@@ -251,6 +255,8 @@ export default function AnnotationOverlay({
               if (ann.type === "text" && onEditText) onEditText(ann);
               if (ann.type === "signature" && onEditSignature) onEditSignature(ann);
               if (ann.type === "sticky" && onEditSticky) onEditSticky(ann);
+              if (ann.type === "shape" && onEditShape) onEditShape(ann);
+              if (ann.type === "comment" && onEditComment) onEditComment(ann);
             }}
           >
             {showDelete && (
@@ -396,7 +402,44 @@ export default function AnnotationOverlay({
                 }}
               />
             )}
-            {ann.type === "shape" && renderShape(ann as ShapeAnnotation)}
+            {ann.type === "shape" && (
+              <>
+                {renderShape(ann as ShapeAnnotation)}
+                {(ann as ShapeAnnotation).text ? (
+                  <div
+                    className="absolute inset-0 flex items-center overflow-hidden px-2 pointer-events-none"
+                    style={{
+                      justifyContent: (ann as ShapeAnnotation).align === "center" ? "center" : (ann as ShapeAnnotation).align === "right" ? "flex-end" : "flex-start",
+                      fontSize: (ann as ShapeAnnotation).fontSize || 14,
+                      color: (ann as ShapeAnnotation).color || "#111827",
+                      fontFamily: editorFontCss((ann as ShapeAnnotation).fontFamily),
+                      fontWeight: (ann as ShapeAnnotation).bold ? 700 : 400,
+                      fontStyle: (ann as ShapeAnnotation).italic ? "italic" : "normal",
+                      textDecoration: [(ann as ShapeAnnotation).underline ? "underline" : "", (ann as ShapeAnnotation).strikethrough ? "line-through" : ""].filter(Boolean).join(" ") || undefined,
+                      textAlign: (ann as ShapeAnnotation).align || "center",
+                      lineHeight: (ann as ShapeAnnotation).lineHeight || 1.25,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {formatDisplayLines((ann as ShapeAnnotation).text || "", (ann as ShapeAnnotation).listStyle).join("\n")}
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] text-muted-foreground/70">
+                    Double-click to add text
+                  </div>
+                )}
+              </>
+            )}
+            {ann.type === "comment" && (
+              <div
+                className="w-7 h-7 rounded-full text-white text-[11px] font-bold flex items-center justify-center shadow-md"
+                style={{ backgroundColor: (ann as CommentAnnotation).color, opacity: (ann as CommentAnnotation).resolved ? 0.45 : 1 }}
+                title={(ann as CommentAnnotation).text || "Comment"}
+              >
+                {commentNumber(annotations, ann.id) || "•"}
+              </div>
+            )}
             {ann.type === "image" && (
               <img
                 src={(ann as ImageAnnotation).imageData}

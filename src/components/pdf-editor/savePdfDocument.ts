@@ -5,7 +5,8 @@ import { editorFontPdf } from "@/lib/editorFonts";
 import { formatDisplayLines } from "@/lib/pendingText";
 import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
 import type { CheckStyle } from "@/lib/checkStyles";
-import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation } from "./types";
+import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation, CommentAnnotation } from "./types";
+import { commentNumber } from "@/lib/editorReview";
 
 /** Helvetica/WinAnsi cannot encode many Unicode punctuation characters. */
 export function toWinAnsi(text: string): string {
@@ -272,6 +273,42 @@ export async function savePdfDocument(
           });
         } else {
           page.drawLine({ start: { x: sx, y: sy + sh / 2 }, end: { x: sx + sw, y: sy + sh / 2 }, color: strokeC, thickness: sha.strokeWidth });
+        }
+        if (sha.text?.trim()) {
+          const size = Math.max(8, Math.min(22, (sha.fontSize || 14) * (pw / cw)));
+          const textFont = pickFont(sha.fontFamily, sha.bold, sha.italic);
+          const hex = sha.color && /^#[0-9a-fA-F]{6}$/.test(sha.color) ? sha.color : "#111827";
+          const tColor = hexToRgb(hex);
+          const maxW = Math.max(8, sw - 10);
+          const lines = wrapTextToWidth(toWinAnsi(sha.text), maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
+          const lineH = size * (sha.lineHeight ?? 1.25);
+          const blockH = lines.length * lineH;
+          const startY = sy + sh / 2 + blockH / 2 - size;
+          lines.forEach((line, i) => {
+            if (!line) return;
+            const lw = textFont.widthOfTextAtSize(line, size);
+            const tx = sha.align === "right" ? sx + sw - 6 - lw : sha.align === "left" ? sx + 6 : sx + (sw - lw) / 2;
+            page.drawText(line, { x: tx, y: startY - i * lineH, size, font: textFont, color: tColor });
+          });
+        }
+        break;
+      }
+      case "comment": {
+        const ca = ann as CommentAnnotation;
+        const mark = commentNumber(annotations, ca.id) || 1;
+        const r = 8;
+        const cx = toPdfX(ca.x) + r;
+        const cy = toPdfY(ca.y) - r;
+        const fill = hexToRgb(ca.color && /^#[0-9a-fA-F]{6}$/.test(ca.color) ? ca.color : "#c2410c");
+        page.drawEllipse({ x: cx, y: cy, xScale: r, yScale: r, color: fill });
+        page.drawText(String(mark), {
+          x: cx - 2.5, y: cy - 3, size: 8, font: helveticaBold, color: rgb(1, 1, 1),
+        });
+        if (ca.text?.trim()) {
+          const note = toWinAnsi(`${ca.author}: ${ca.text}`);
+          page.drawText(note.slice(0, 80), {
+            x: cx + 12, y: cy - 3, size: 7, font: helvetica, color: rgb(0.25, 0.2, 0.15),
+          });
         }
         break;
       }

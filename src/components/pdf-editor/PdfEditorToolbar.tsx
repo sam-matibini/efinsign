@@ -8,12 +8,13 @@ import {
   Check, Highlighter, Shapes, ImageIcon, Square, Circle, Minus,
   Undo2, Redo2, Eraser, Droplets, PanelTop, Bold, Italic, Underline,
   Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered,
-  PenTool, StickyNote, Triangle, Diamond, ArrowRight, Radius,
+  PenTool, StickyNote, Triangle, Diamond, ArrowRight, Radius, MessageSquare,
 } from "lucide-react";
 import type { EditorFont, ListStyle, ToolMode, ShapeType, TextAlign } from "./types";
 import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
 import { EDITOR_FONTS, HIGHLIGHT_BG_PRESETS, LINE_SPACING } from "@/lib/editorFonts";
 import { COVER_FINISHES, DRAW_INK_COLORS } from "@/lib/editorMarks";
+import { SHAPE_BORDER_PRESETS, SHAPE_FILL_PRESETS } from "@/lib/editorReview";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -84,6 +85,7 @@ interface PdfEditorToolbarProps {
   onOpenWatermark: () => void;
   onOpenHeaderFooter: () => void;
   onNextAction?: () => void;
+  selectedKind?: "text" | "shape" | "comment" | null;
 }
 
 export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
@@ -101,8 +103,10 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     shapeFillColor, setShapeFillColor, shapeStrokeWidth, setShapeStrokeWidth,
     onImageUpload, saving, onSave, onBack,
     onUndo, onRedo, canUndo, canRedo,
-    onOpenWatermark, onOpenHeaderFooter, onNextAction,
+    onOpenWatermark, onOpenHeaderFooter, onNextAction, selectedKind,
   } = props;
+  const showTextFormat = tool === "text" || selectedKind === "shape";
+  const showShapeFormat = tool === "shape" || selectedKind === "shape";
 
   const tools: { mode: ToolMode; icon: any; label: string }[] = [
     { mode: "select", icon: MousePointer, label: "Select" },
@@ -113,6 +117,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     { mode: "checkmark", icon: Check, label: "Check" },
     { mode: "highlight", icon: Highlighter, label: "Highlight" },
     { mode: "shape", icon: Shapes, label: "Shape" },
+    { mode: "comment", icon: MessageSquare, label: "Comment" },
     { mode: "signature", icon: PenTool, label: "Signature" },
     { mode: "sticky", icon: StickyNote, label: "Next" },
     { mode: "image", icon: ImageIcon, label: "Image" },
@@ -152,7 +157,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         ))}
       </div>
 
-      {tool === "text" && (
+      {showTextFormat && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <Select value={textFont} onValueChange={(v) => setTextFont(v as EditorFont)}>
             <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
@@ -240,7 +245,9 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
           <Button variant={listStyle === "number" ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" title="Numbered list" onClick={() => setListStyle(listStyle === "number" ? "none" : "number")}>
             <ListOrdered className="h-3.5 w-3.5" />
           </Button>
-          <span className="text-[10px] text-muted-foreground max-w-40 leading-tight">Wraps inside the box. Double-click to edit.</span>
+          <span className="text-[10px] text-muted-foreground max-w-40 leading-tight">
+            {selectedKind === "shape" ? "Word formatting applies to text inside the shape." : "Wraps inside the box. Double-click to edit."}
+          </span>
         </div>
       )}
 
@@ -250,6 +257,9 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
 
       {tool === "signature" && (
         <span className="text-[10px] text-muted-foreground">Click the page to place a signature box. Double-click the box to draw or type a signature.</span>
+      )}
+      {tool === "comment" && (
+        <span className="text-[10px] text-muted-foreground">Click the page to drop a comment balloon, then type in the Comments pane.</span>
       )}
       {tool === "sticky" && (
         <span className="text-[10px] text-muted-foreground">Click to drop a Next sticky note that tells people where to sign or type.</span>
@@ -368,40 +378,50 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
-      {tool === "shape" && (
+      {showShapeFormat && (
         <div className="flex items-center gap-2 flex-wrap">
+          {tool === "shape" && (
+            <div className="flex gap-1">
+              {([
+                { t: "rect" as ShapeType, icon: Square, label: "Rectangle" },
+                { t: "rounded" as ShapeType, icon: Radius, label: "Rounded" },
+                { t: "circle" as ShapeType, icon: Circle, label: "Circle" },
+                { t: "ellipse" as ShapeType, icon: Circle, label: "Ellipse" },
+                { t: "line" as ShapeType, icon: Minus, label: "Line" },
+                { t: "triangle" as ShapeType, icon: Triangle, label: "Triangle" },
+                { t: "diamond" as ShapeType, icon: Diamond, label: "Diamond" },
+                { t: "arrow" as ShapeType, icon: ArrowRight, label: "Arrow" },
+              ]).map(({ t, icon: Icon, label }) => (
+                <Button key={t} variant={shapeType === t ? "default" : "ghost"} size="sm" className="h-7 w-7 p-0" title={label} onClick={() => setShapeType(t)}>
+                  <Icon className="h-3.5 w-3.5" />
+                </Button>
+              ))}
+            </div>
+          )}
+          <span className="text-[10px] text-muted-foreground">Border</span>
           <div className="flex gap-1">
-            {([
-              { t: "rect" as ShapeType, icon: Square, label: "Rectangle" },
-              { t: "rounded" as ShapeType, icon: Radius, label: "Rounded" },
-              { t: "circle" as ShapeType, icon: Circle, label: "Circle" },
-              { t: "ellipse" as ShapeType, icon: Circle, label: "Ellipse" },
-              { t: "line" as ShapeType, icon: Minus, label: "Line" },
-              { t: "triangle" as ShapeType, icon: Triangle, label: "Triangle" },
-              { t: "diamond" as ShapeType, icon: Diamond, label: "Diamond" },
-              { t: "arrow" as ShapeType, icon: ArrowRight, label: "Arrow" },
-            ]).map(({ t, icon: Icon, label }) => (
-              <Button key={t} variant={shapeType === t ? "default" : "ghost"} size="sm" className="h-7 w-7 p-0" title={label} onClick={() => setShapeType(t)}>
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
+            {SHAPE_BORDER_PRESETS.map((c) => (
+              <button key={c.value} type="button" title={`Border ${c.label}`} className={`h-6 w-6 rounded-full border ${shapeStrokeColor === c.value ? "ring-2 ring-primary" : "border-border"}`} style={{ backgroundColor: c.value }} onClick={() => setShapeStrokeColor(c.value)} />
             ))}
           </div>
-          <input type="color" value={shapeStrokeColor} onChange={(e) => setShapeStrokeColor(e.target.value)} className="h-6 w-6 rounded cursor-pointer" title="Stroke" />
-          <Popover>
-            <PopoverTrigger asChild>
+          <input type="color" value={shapeStrokeColor} onChange={(e) => setShapeStrokeColor(e.target.value)} className="h-6 w-6 rounded cursor-pointer" title="Custom border" />
+          <span className="text-[10px] text-muted-foreground">Fill</span>
+          <div className="flex gap-1">
+            {SHAPE_FILL_PRESETS.map((c) => (
               <button
-                className="h-6 w-6 rounded border border-border cursor-pointer"
-                style={{ backgroundColor: shapeFillColor === "none" ? "transparent" : shapeFillColor }}
-                title="Fill"
+                key={c.value}
+                type="button"
+                title={`Fill ${c.label}`}
+                className={`h-6 w-6 rounded-sm border ${shapeFillColor === c.value ? "ring-2 ring-primary" : "border-border"}`}
+                style={{
+                  backgroundColor: c.value === "none" ? "transparent" : c.value,
+                  backgroundImage: c.value === "none" ? "repeating-linear-gradient(45deg,transparent,transparent 3px,hsl(var(--muted)) 3px,hsl(var(--muted)) 6px)" : undefined,
+                }}
+                onClick={() => setShapeFillColor(c.value)}
               />
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2 flex gap-1">
-              <button className="h-6 w-6 rounded border border-border bg-[repeating-linear-gradient(45deg,transparent,transparent_3px,hsl(var(--muted))_3px,hsl(var(--muted))_6px)]" onClick={() => setShapeFillColor("none")} title="None" />
-              {["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#000000", "#ffffff"].map((c) => (
-                <button key={c} className="h-6 w-6 rounded border border-border" style={{ backgroundColor: c }} onClick={() => setShapeFillColor(c)} />
-              ))}
-            </PopoverContent>
-          </Popover>
+            ))}
+          </div>
+          <input type="color" value={shapeFillColor === "none" ? "#ffffff" : shapeFillColor} onChange={(e) => setShapeFillColor(e.target.value)} className="h-6 w-6 rounded cursor-pointer" title="Custom fill" />
           <Select value={String(shapeStrokeWidth)} onValueChange={(v) => setShapeStrokeWidth(Number(v))}>
             <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>

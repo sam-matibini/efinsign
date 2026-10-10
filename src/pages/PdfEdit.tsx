@@ -16,7 +16,7 @@ import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
 import { saveEditedPdfBlob } from "@/lib/saveEditedPdf";
 import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
-import type { Annotation, EditorFont, ListStyle, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState, SignatureAnnotation, StickyNoteAnnotation } from "@/components/pdf-editor/types";
+import type { Annotation, CommentAnnotation, EditorFont, ListStyle, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState, ShapeAnnotation, SignatureAnnotation, StickyNoteAnnotation } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 import { defaultTextBoxHeight, nudgeRect } from "@/lib/textLayout";
@@ -28,6 +28,8 @@ import PageDemarcator from "@/components/PageDemarcator";
 import SignatureCapture from "@/components/SignatureCapture";
 import { Textarea } from "@/components/ui/textarea";
 import { clampWatermarkSize, watermarkMetrics } from "@/lib/watermark";
+import { COMMENT_COLORS } from "@/lib/editorReview";
+import CommentPane from "@/components/pdf-editor/CommentPane";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -131,6 +133,8 @@ export default function PdfEdit() {
     align?: TextAlign;
   } | null>(null);
   const [textValue, setTextValue] = useState("");
+  const [editingShape, setEditingShape] = useState<ShapeAnnotation | null>(null);
+  const [commentColor, setCommentColor] = useState<string>(COMMENT_COLORS[0].value);
   const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [watermarkText, setWatermarkText] = useState("DRAFT");
   const [watermarkSize, setWatermarkSize] = useState(48);
@@ -296,9 +300,24 @@ export default function PdfEdit() {
         setAnnotations((prev) => [...prev, { type: "checkmark", id: genId(), pageIndex, x, y, size: checkmarkSize, style: checkStyle }]);
       } else if (tool === "image" && pendingImage) {
         setAnnotations((prev) => [...prev, { type: "image", id: genId(), pageIndex, x, y, width: 150, height: 150, imageData: pendingImage }]);
+      } else if (tool === "comment") {
+        const id = genId();
+        setAnnotations((prev) => [...prev, {
+          type: "comment",
+          id,
+          pageIndex,
+          x,
+          y,
+          text: "",
+          author: user?.email || "Reviewer",
+          color: commentColor,
+          createdAt: new Date().toISOString(),
+        }]);
+        setSelectedAnnotationId(id);
+        toast.message("Type the comment in the Comments pane.");
       }
     },
-    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize, textAlign]
+    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize, textAlign, commentColor, user]
   );
 
   const handleNextAction = useCallback(() => {
@@ -377,13 +396,36 @@ export default function PdfEdit() {
 
   const patchSelectedText = useCallback((patch: Partial<TextAnnotation>) => {
     if (!selectedAnnotationId) return;
-    setAnnotations((prev) => prev.map((a) => (
-      a.id === selectedAnnotationId && a.type === "text" ? { ...a, ...patch } : a
-    )));
+    setAnnotations((prev) => prev.map((a) => {
+      if (a.id !== selectedAnnotationId) return a;
+      if (a.type === "text" || a.type === "shape") return { ...a, ...patch } as Annotation;
+      return a;
+    }));
     if (editingText && patch.align) {
       setEditingText((prev) => prev ? { ...prev, align: patch.align } : prev);
     }
-  }, [editingText, selectedAnnotationId, setAnnotations]);
+    if (editingShape) {
+      setEditingShape((prev) => prev ? { ...prev, ...patch } : prev);
+    }
+  }, [editingText, editingShape, selectedAnnotationId, setAnnotations]);
+
+  const patchSelectedShape = useCallback((patch: Partial<ShapeAnnotation>) => {
+    if (!selectedAnnotationId) return;
+    setAnnotations((prev) => prev.map((a) => (
+      a.id === selectedAnnotationId && a.type === "shape" ? { ...a, ...patch } : a
+    )));
+  }, [selectedAnnotationId, setAnnotations]);
+
+  useEffect(() => {
+    const selected = annotations.find((a) => a.id === selectedAnnotationId);
+    if (selected?.type !== "shape") return;
+    setShapeStrokeColor(selected.strokeColor);
+    setShapeFillColor(selected.fillColor);
+    setShapeStrokeWidth(selected.strokeWidth);
+    if (selected.color) setTextColor(selected.color);
+    if (selected.fontFamily) setTextFont(selected.fontFamily);
+    if (selected.fontSize) setFontSize(selected.fontSize);
+  }, [selectedAnnotationId]);
 
   const applyWatermark = useCallback(() => {
     const label = watermarkText.trim();
@@ -472,11 +514,56 @@ export default function PdfEdit() {
   }, [coverColor, setAnnotations]);
 
   const handleShapeComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
+    const id = genId();
     setAnnotations((prev) => [...prev, {
-      type: "shape", id: genId(), pageIndex, x, y, width: w, height: h,
+      type: "shape", id, pageIndex, x, y, width: Math.max(48, w), height: Math.max(36, h),
       shapeType, strokeColor: shapeStrokeColor, fillColor: shapeFillColor, strokeWidth: shapeStrokeWidth,
+      fontSize, color: textColor, fontFamily: textFont, bold: textBold, italic: textItalic,
+      underline: textUnderline, strikethrough: textStrike, align: textAlign, lineHeight, listStyle,
+      text: "",
     }]);
-  }, [shapeType, shapeStrokeColor, shapeFillColor, shapeStrokeWidth, setAnnotations]);
+    setSelectedAnnotationId(id);
+    toast.message("Double-click the shape to add Word-formatted text.");
+  }, [shapeType, shapeStrokeColor, shapeFillColor, shapeStrokeWidth, fontSize, textColor, textFont, textBold, textItalic, textUnderline, textStrike, textAlign, lineHeight, listStyle, setAnnotations]);
+
+  const handleEditShape = useCallback((ann: ShapeAnnotation) => {
+    setTool("select");
+    setSelectedAnnotationId(ann.id);
+    setEditingShape(ann);
+    setTextValue(ann.text || "");
+    if (ann.fontSize) setFontSize(ann.fontSize);
+    if (ann.color) setTextColor(ann.color);
+    if (ann.fontFamily) setTextFont(ann.fontFamily);
+    setTextBold(!!ann.bold);
+    setTextItalic(!!ann.italic);
+    setTextUnderline(!!ann.underline);
+    setTextStrike(!!ann.strikethrough);
+    if (ann.align) setTextAlign(ann.align);
+    setShapeStrokeColor(ann.strokeColor);
+    setShapeFillColor(ann.fillColor);
+    setShapeStrokeWidth(ann.strokeWidth);
+  }, []);
+
+  const confirmShapeText = useCallback(() => {
+    if (!editingShape) return;
+    setAnnotations((prev) => prev.map((a) => a.id === editingShape.id && a.type === "shape" ? {
+      ...a,
+      ...editingShape,
+      text: textValue,
+      fontSize,
+      color: textColor,
+      fontFamily: textFont,
+      bold: textBold,
+      italic: textItalic,
+      underline: textUnderline,
+      strikethrough: textStrike,
+      align: textAlign,
+      lineHeight,
+      listStyle,
+    } : a));
+    setEditingShape(null);
+    setTextValue("");
+  }, [editingShape, textValue, fontSize, textColor, textFont, textBold, textItalic, textUnderline, textStrike, textAlign, lineHeight, listStyle, setAnnotations]);
 
   const handleDeleteAnnotation = useCallback((annId: string) => {
     setAnnotations((prev) => prev.filter((a) => a.id !== annId));
@@ -535,6 +622,7 @@ export default function PdfEdit() {
         docTitle={doc.title}
         tool={tool} setTool={setTool}
         fontSize={fontSize} setFontSize={setFontSize}
+        selectedKind={annotations.find((a) => a.id === selectedAnnotationId)?.type === "shape" ? "shape" : annotations.find((a) => a.id === selectedAnnotationId)?.type === "text" ? "text" : annotations.find((a) => a.id === selectedAnnotationId)?.type === "comment" ? "comment" : null}
         textColor={textColor} setTextColor={(c) => { setTextColor(c); patchSelectedText({ color: c }); }}
         textBackground={textBackground} setTextBackground={(c) => { setTextBackground(c); patchSelectedText({ backgroundColor: c === "none" ? undefined : c }); }}
         textFont={textFont} setTextFont={(f) => { setTextFont(f); patchSelectedText({ fontFamily: f }); }}
@@ -555,17 +643,23 @@ export default function PdfEdit() {
           setFontSize((size) => Math.min(72, Math.max(8, size + delta)));
           if (!selectedAnnotationId) return;
           setAnnotations((prev) => prev.map((ann) => {
-            if (ann.id !== selectedAnnotationId || ann.type !== "text") return ann;
-            const fontSizeNext = Math.min(72, Math.max(8, ann.fontSize + delta));
-            return { ...ann, fontSize: fontSizeNext, height: estimateWrappedHeight(ann.text, fontSizeNext, ann.width || DEFAULT_TEXT_BOX_WIDTH) };
+            if (ann.id !== selectedAnnotationId) return ann;
+            if (ann.type === "text") {
+              const fontSizeNext = Math.min(72, Math.max(8, ann.fontSize + delta));
+              return { ...ann, fontSize: fontSizeNext, height: estimateWrappedHeight(ann.text, fontSizeNext, ann.width || DEFAULT_TEXT_BOX_WIDTH) };
+            }
+            if (ann.type === "shape") {
+              return { ...ann, fontSize: Math.min(72, Math.max(8, (ann.fontSize || 14) + delta)) };
+            }
+            return ann;
           }));
         }}
         highlightColor={highlightColor} setHighlightColor={setHighlightColor}
         highlightOpacity={highlightOpacity} setHighlightOpacity={setHighlightOpacity}
-        shapeType={shapeType} setShapeType={setShapeType}
-        shapeStrokeColor={shapeStrokeColor} setShapeStrokeColor={setShapeStrokeColor}
-        shapeFillColor={shapeFillColor} setShapeFillColor={setShapeFillColor}
-        shapeStrokeWidth={shapeStrokeWidth} setShapeStrokeWidth={setShapeStrokeWidth}
+        shapeType={shapeType} setShapeType={(t) => { setShapeType(t); patchSelectedShape({ shapeType: t }); }}
+        shapeStrokeColor={shapeStrokeColor} setShapeStrokeColor={(c) => { setShapeStrokeColor(c); patchSelectedShape({ strokeColor: c }); }}
+        shapeFillColor={shapeFillColor} setShapeFillColor={(c) => { setShapeFillColor(c); patchSelectedShape({ fillColor: c }); }}
+        shapeStrokeWidth={shapeStrokeWidth} setShapeStrokeWidth={(w) => { setShapeStrokeWidth(w); patchSelectedShape({ strokeWidth: w }); }}
         onImageUpload={handleImageUpload}
         saving={saving} onSave={savePdf}
         onBack={() => navigate(`/documents/${id}`)}
@@ -654,7 +748,43 @@ export default function PdfEdit() {
                     onEditText={handleEditText}
                     onEditSignature={(ann) => setSignatureTargetId(ann.id)}
                     onEditSticky={(ann) => setStickyEditor({ id: ann.id, text: ann.text })}
+                    onEditShape={handleEditShape}
+                    onEditComment={(ann) => setSelectedAnnotationId(ann.id)}
                   />
+
+                  {editingShape?.pageIndex === index && (
+                    <TextBoxEditor
+                      x={editingShape.x}
+                      y={editingShape.y}
+                      width={editingShape.width}
+                      height={editingShape.height}
+                      text={textValue}
+                      fontSize={fontSize}
+                      align={textAlign}
+                      color={textColor}
+                      backgroundColor="none"
+                      fontFamily={editorFontCss(textFont)}
+                      bold={textBold}
+                      italic={textItalic}
+                      underline={textUnderline}
+                      strikethrough={textStrike}
+                      lineHeight={lineHeight}
+                      pageWidth={canvasRefs.current.get(pageState.pageNum)?.width || 900}
+                      pageHeight={canvasRefs.current.get(pageState.pageNum)?.height || 1200}
+                      otherRects={[]}
+                      onChange={(next) => {
+                        setTextValue(next.text);
+                        setEditingShape((prev) => prev ? { ...prev, ...next } : prev);
+                      }}
+                      onCommit={confirmShapeText}
+                      onCancel={() => { setEditingShape(null); setTextValue(""); }}
+                      onDelete={() => {
+                        handleDeleteAnnotation(editingShape.id);
+                        setEditingShape(null);
+                        setTextValue("");
+                      }}
+                    />
+                  )}
 
                   {editingText?.pageIndex === index && (
                     <TextBoxEditor
@@ -716,6 +846,23 @@ export default function PdfEdit() {
             })}
           </div>
         </div>
+        {(tool === "comment" || annotations.some((a) => a.type === "comment")) && (
+          <CommentPane
+            comments={annotations.filter((a): a is CommentAnnotation => a.type === "comment")}
+            selectedId={selectedAnnotationId}
+            onSelect={(id) => {
+              setSelectedAnnotationId(id);
+              const comment = annotations.find((a) => a.id === id);
+              if (comment && "pageIndex" in comment) {
+                setActivePageIndex(comment.pageIndex);
+                document.querySelector(`[data-editor-page="${comment.pageIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }}
+            onChange={(id, text) => setAnnotations((prev) => prev.map((a) => a.id === id && a.type === "comment" ? { ...a, text } : a))}
+            onResolve={(id) => setAnnotations((prev) => prev.map((a) => a.id === id && a.type === "comment" ? { ...a, resolved: !a.resolved } : a))}
+            onDelete={handleDeleteAnnotation}
+          />
+        )}
       </div>
 
       <Dialog open={watermarkOpen} onOpenChange={setWatermarkOpen}>
