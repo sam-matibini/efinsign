@@ -8,6 +8,7 @@ import {
   ArrowRight,
   ArrowUp,
   GripVertical,
+  Save,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,12 +44,13 @@ interface TextBoxEditorProps {
   onCancel: () => void;
   onDelete?: () => void;
   onAdvance?: (nextType: string) => void;
+  saving?: boolean;
 }
 
 export default function TextBoxEditor({
   x, y, width, height, text, fontSize, align, color, backgroundColor, fontFamily, bold, italic,
   underline, strikethrough, lineHeight, pageWidth, pageHeight, otherRects,
-  onChange, onCommit, onCancel, onDelete, onAdvance,
+  onChange, onCommit, onCancel, onDelete, onAdvance, saving,
 }: TextBoxEditorProps) {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
@@ -166,6 +168,19 @@ export default function TextBoxEditor({
               <Icon className="h-3 w-3" />
             </Button>
           ))}
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <Button
+            type="button"
+            size="sm"
+            className="h-6 px-2 gap-1"
+            title="Save text to the document"
+            disabled={saving}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onCommit}
+          >
+            <Save className="h-3 w-3" />
+            {saving ? "Saving" : "Save"}
+          </Button>
           {onDelete && (
             <>
               <div className="w-px h-4 bg-border mx-0.5" />
@@ -206,7 +221,7 @@ export default function TextBoxEditor({
               onCommit();
             }
           }}
-          className="w-full h-full min-h-0 resize-none p-1 border-primary"
+          className="w-full h-full min-h-0 resize-none p-1 border-primary whitespace-pre-wrap placeholder:whitespace-normal"
           style={{
             fontSize,
             lineHeight: lineHeight ?? 1.25,

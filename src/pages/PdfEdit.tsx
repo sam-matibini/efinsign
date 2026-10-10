@@ -145,6 +145,7 @@ export default function PdfEdit() {
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const renderTasksRef = useRef<Map<number, any>>(new Map());
+  const clearMarksAfterReload = useRef(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -213,10 +214,17 @@ export default function PdfEdit() {
       pdfDocRef.current = pdf;
       setPageCount(pdf.numPages);
       setPages(Array.from({ length: pdf.numPages }, (_, i) => ({ pageNum: i + 1, deleted: false })));
+      if (clearMarksAfterReload.current) {
+        clearMarksAfterReload.current = false;
+        setAnnotationsRaw([]);
+        historyRef.current = [];
+        futureRef.current = [];
+        setTimeout(() => syncUndoRedoState(), 0);
+      }
     };
     loadPdf();
     return () => { cancelled = true; };
-  }, [pdfUrl]);
+  }, [pdfUrl, syncUndoRedoState]);
 
   // Render pages to canvases (effect 2)
   useEffect(() => {
@@ -363,16 +371,55 @@ export default function PdfEdit() {
     });
   }, [editingText, textValue, fontSize, textColor, textBackground, textFont, textBold, textItalic, textUnderline, textStrike, lineHeight, listStyle]);
 
-  const confirmText = useCallback(() => {
-    if (textCommitRef.current) return;
+  const persistDocument = useCallback(async (
+    toEmbed: Annotation[],
+    options: { leave: boolean; successMessage: string },
+  ) => {
+    if (!pdfUrl || !doc?.file_path) return;
+    setSaving(true);
+    try {
+      const pdfBytes = await savePdfDocument(pdfUrl, pages, toEmbed, canvasRefs.current);
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const storedPath = await saveEditedPdfBlob(doc.id, doc.file_path, blob, {
+        organizationId: doc.organization_id,
+        userId: user?.id,
+      });
+      setDoc((prev: any) => prev ? { ...prev, file_path: storedPath } : prev);
+      toast.success(options.successMessage);
+      if (options.leave) {
+        navigate(`/documents/${id}`);
+        return;
+      }
+      const { data: urlData } = await supabase.storage.from("documents").createSignedUrl(storedPath, 3600);
+      if (urlData?.signedUrl) {
+        clearMarksAfterReload.current = true;
+        setPdfUrl(urlData.signedUrl);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save PDF");
+    } finally {
+      setSaving(false);
+    }
+  }, [pdfUrl, doc, pages, user, navigate, id]);
+
+  const saveTextToDocument = useCallback(async () => {
+    if (textCommitRef.current || saving) return;
     const next = pendingTextAnnotation();
-    if (!next) { setEditingText(null); return; }
+    if (!next) {
+      toast.error("Type some text before saving");
+      return;
+    }
     textCommitRef.current = true;
     setTimeout(() => { textCommitRef.current = false; }, 0);
+    const toEmbed = withPendingText(annotations, next);
     setAnnotations((prev) => withPendingText(prev, next));
     setEditingText(null);
     setTextValue("");
-  }, [pendingTextAnnotation, setAnnotations]);
+    await persistDocument(toEmbed, {
+      leave: false,
+      successMessage: "Text saved to the document",
+    });
+  }, [annotations, pendingTextAnnotation, persistDocument, saving, setAnnotations]);
 
   const handleEditText = useCallback((ann: TextAnnotation) => {
     setTool("select");
@@ -575,28 +622,17 @@ export default function PdfEdit() {
 
   const savePdf = async () => {
     if (!pdfUrl || !doc?.file_path) return;
-    setSaving(true);
-    try {
-      const pending = pendingTextAnnotation();
-      const toEmbed = withPendingText(annotations, pending);
-      if (pending) {
-        setAnnotations((prev) => withPendingText(prev, pending));
-        setEditingText(null);
-        setTextValue("");
-      }
-      const pdfBytes = await savePdfDocument(pdfUrl, pages, toEmbed, canvasRefs.current);
-      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-      await saveEditedPdfBlob(doc.id, doc.file_path, blob, {
-        organizationId: doc.organization_id,
-        userId: user?.id,
-      });
-      toast.success("PDF saved successfully");
-      navigate(`/documents/${id}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save PDF");
-    } finally {
-      setSaving(false);
+    const pending = pendingTextAnnotation();
+    const toEmbed = withPendingText(annotations, pending);
+    if (pending) {
+      setAnnotations((prev) => withPendingText(prev, pending));
+      setEditingText(null);
+      setTextValue("");
     }
+    await persistDocument(toEmbed, {
+      leave: true,
+      successMessage: "PDF saved successfully",
+    });
   };
 
   if (!doc || !pdfUrl) {
@@ -769,19 +805,20 @@ export default function PdfEdit() {
                         setTextValue(next.text);
                         setEditingText((prev) => prev ? { ...prev, ...next } : prev);
                       }}
-                      onCommit={confirmText}
+                      onCommit={saveTextToDocument}
+                      saving={saving}
                       onCancel={() => { setEditingText(null); setTextValue(""); }}
                       onDelete={() => {
                         if (editingText.id) handleDeleteAnnotation(editingText.id);
                         setEditingText(null);
                         setTextValue("");
                       }}
-                      onAdvance={(nextType) => {
-                        confirmText();
+                      onAdvance={async (nextType) => {
+                        await saveTextToDocument();
                         if (nextType === "auto") handleNextAction();
                         else {
                           setTool(nextType as ToolMode);
-                          toast.message(`Text stuck. Next: place ${nextType.replaceAll("_", " ")}`);
+                          toast.message(`Text saved. Next: place ${nextType.replaceAll("_", " ")}`);
                         }
                       }}
                     />

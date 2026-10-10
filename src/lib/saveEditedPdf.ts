@@ -38,11 +38,11 @@ export async function saveEditedPdfBlob(
   filePath: string,
   blob: Blob,
   extras?: { organizationId?: string | null; userId?: string | null },
-): Promise<void> {
+): Promise<string> {
   const inPlace = await tryStore(filePath, blob);
   if (!inPlace) {
     await supabase.from("documents").update({ updated_at: new Date().toISOString() }).eq("id", documentId);
-    return;
+    return filePath;
   }
 
   const newPath = nextEditedPath(filePath, extras?.organizationId, extras?.userId);
@@ -54,16 +54,18 @@ export async function saveEditedPdfBlob(
       .eq("id", documentId);
     if (docError) throw docError;
     await supabase.storage.from("documents").remove([filePath]);
-    return;
+    return newPath;
   }
 
+  const storedPath = extras?.organizationId ? newPath : filePath;
   const { data, error } = await supabase.functions.invoke("save-edited-pdf", {
     body: {
       documentId,
-      filePath: extras?.organizationId ? newPath : filePath,
+      filePath: storedPath,
       pdfBase64: await blobToBase64(blob),
     },
   });
   if (error) throw new Error(error.message || inPlace.message);
   if (data?.error) throw new Error(data.error);
+  return storedPath;
 }
