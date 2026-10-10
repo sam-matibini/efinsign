@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decodeFieldValue, encodeFieldValue } from "@/lib/fieldStyle";
-import { nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
+import { nextStepAfterStick, nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
 import { isSealField, sealFromField } from "@/lib/companySeals";
 
 describe("field style encoding", () => {
@@ -43,5 +43,11 @@ describe("next action", () => {
       { id: "b", field_type: "text", value: "" },
     ]);
     expect(next?.id).toBe("b");
+  });
+
+  it("sticks the current filled text and places the next missing action", () => {
+    const fields = [{ id: "ceo", field_type: "text", value: "Chief Executive Officer (CEO)" }];
+    expect(nextUnfilledField(fields, "ceo")).toBeNull();
+    expect(nextStepAfterStick(fields, "ceo")).toEqual({ kind: "place", type: "signature" });
   });
 });

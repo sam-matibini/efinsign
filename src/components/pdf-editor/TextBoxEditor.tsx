@@ -16,6 +16,8 @@ import type { TextAlign } from "@/lib/textLayout";
 import { clampRect, snapRect } from "@/lib/textLayout";
 import type { ResizeDir } from "./resizeHandles";
 import { MIN_SIZE, renderResizeHandles } from "./resizeHandles";
+import NextActionSelect from "@/components/NextActionSelect";
+import { EDITOR_NEXT_CHOICES } from "@/lib/nextAction";
 
 interface TextBoxEditorProps {
   x: number;
@@ -40,12 +42,13 @@ interface TextBoxEditorProps {
   onCommit: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  onAdvance?: (nextType: string) => void;
 }
 
 export default function TextBoxEditor({
   x, y, width, height, text, fontSize, align, color, backgroundColor, fontFamily, bold, italic,
   underline, strikethrough, lineHeight, pageWidth, pageHeight, otherRects,
-  onChange, onCommit, onCancel, onDelete,
+  onChange, onCommit, onCancel, onDelete, onAdvance,
 }: TextBoxEditorProps) {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
@@ -177,6 +180,12 @@ export default function TextBoxEditor({
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
+            </>
+          )}
+          {onAdvance && (
+            <>
+              <div className="w-px h-4 bg-border mx-0.5" />
+              <NextActionSelect compact choices={EDITOR_NEXT_CHOICES} onPick={onAdvance} />
             </>
           )}
         </div>

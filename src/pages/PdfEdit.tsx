@@ -672,6 +672,14 @@ export default function PdfEdit() {
                         setEditingText(null);
                         setTextValue("");
                       }}
+                      onAdvance={(nextType) => {
+                        confirmText();
+                        if (nextType === "auto") handleNextAction();
+                        else {
+                          setTool(nextType as ToolMode);
+                          toast.message(`Text stuck. Next: place ${nextType.replaceAll("_", " ")}`);
+                        }
+                      }}
                     />
                   )}
                 </div>

@@ -7,6 +7,7 @@ import { isSealField, sealFromField } from "@/lib/documentFields";
 import { editorFontCss } from "@/lib/editorFonts";
 import { decodeFieldValue, type FieldStyle } from "@/lib/fieldStyle";
 import { clampRect, snapRect } from "@/lib/textLayout";
+import NextActionSelect from "@/components/NextActionSelect";
 
 interface DraggableFieldProps {
   id: string;
@@ -25,6 +26,7 @@ interface DraggableFieldProps {
   onAdjustFont?: (id: string, direction: 1 | -1) => void;
   onEdit?: (id: string) => void;
   onSelect?: (id: string) => void;
+  onAdvance?: (id: string, nextType: string) => void;
   otherRects?: { x: number; y: number; w: number; h: number }[];
   pageWidth?: number;
   pageHeight?: number;
@@ -43,7 +45,7 @@ const CURSORS: Record<HandleDir, string> = {
 
 export default function DraggableField({
   id, x, y, width, height, color, label, value, fieldType, selected,
-  onMove, onResize, onDelete, onAdjustFont, onEdit, onSelect, otherRects = [], pageWidth = 0, pageHeight = 0,
+  onMove, onResize, onDelete, onAdjustFont, onEdit, onSelect, onAdvance, otherRects = [], pageWidth = 0, pageHeight = 0,
 }: DraggableFieldProps) {
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -239,11 +241,18 @@ export default function DraggableField({
           )}
         </div>
       )}
-      {showChrome && onAdjustFont && textLike && (
+      {showChrome && ((onAdjustFont && textLike) || onAdvance) && (
         <div className="absolute -bottom-7 left-0 flex gap-1 z-20" onMouseDown={(e) => e.stopPropagation()}>
-          <button type="button" className="h-6 px-1.5 rounded bg-card border text-[11px]" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, -1); }}>A−</button>
-          <span className="h-6 px-1 rounded bg-card border text-[10px] flex items-center">{textSize}</span>
-          <button type="button" className="h-6 px-1.5 rounded bg-card border text-xs font-semibold" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, 1); }}>A+</button>
+          {onAdjustFont && textLike && (
+            <>
+              <button type="button" className="h-6 px-1.5 rounded bg-card border text-[11px]" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, -1); }}>A−</button>
+              <span className="h-6 px-1 rounded bg-card border text-[10px] flex items-center">{textSize}</span>
+              <button type="button" className="h-6 px-1.5 rounded bg-card border text-xs font-semibold" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, 1); }}>A+</button>
+            </>
+          )}
+          {onAdvance && (
+            <NextActionSelect compact onPick={(nextType) => onAdvance(id, nextType)} />
+          )}
         </div>
       )}
       {onDelete && (

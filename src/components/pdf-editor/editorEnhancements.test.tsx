@@ -127,4 +127,32 @@ describe("Fill & Sign account details", () => {
     fireEvent.click(screen.getByRole("button", { name: "Full Name" }));
     expect(onIdentityField).toHaveBeenCalledWith("full_name");
   });
+
+  it("offers a selector to stick text and pick the next action", () => {
+    const onAdvance = vi.fn();
+    render(
+      <FillSignSidebar
+        pendingFieldType={null}
+        onFieldTypeClick={vi.fn()}
+        savedSignature={null}
+        savedInitials={null}
+        onSaveSignature={vi.fn()}
+        onSaveInitials={vi.fn()}
+        onDeleteSignature={vi.fn()}
+        onDeleteInitials={vi.fn()}
+        onSignAndSave={vi.fn()}
+        onCancel={vi.fn()}
+        signing={false}
+        allSavedSignatures={[]}
+        allSavedInitials={[]}
+        onPersistSignature={vi.fn()}
+        onPersistInitials={vi.fn()}
+        onDeleteSavedSig={vi.fn()}
+        onTextFieldRequest={vi.fn()}
+        onAdvance={onAdvance}
+      />
+    );
+    expect(screen.getByRole("button", { name: /Stick & next/ })).toBeInTheDocument();
+    expect(onAdvance).not.toHaveBeenCalled();
+  });
 });

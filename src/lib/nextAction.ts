@@ -1,6 +1,25 @@
 export const FILL_NEXT_TYPES = ["signature", "initials", "text", "date"] as const;
 export const EDITOR_NEXT_TOOLS = ["signature", "text"] as const;
 
+export const FILL_NEXT_CHOICES = [
+  { type: "auto", label: "Next action" },
+  { type: "signature", label: "Signature" },
+  { type: "initials", label: "Initials" },
+  { type: "text", label: "Text" },
+  { type: "full_name", label: "Full name" },
+  { type: "title", label: "Title" },
+  { type: "date", label: "Date" },
+  { type: "checkmark", label: "Checkmark" },
+] as const;
+
+export const EDITOR_NEXT_CHOICES = [
+  { type: "auto", label: "Next action" },
+  { type: "signature", label: "Signature" },
+  { type: "text", label: "Text" },
+  { type: "stamp", label: "Seal / stamp" },
+  { type: "checkmark", label: "Checkmark" },
+] as const;
+
 export function nextUnplacedType<T extends { field_type: string }>(
   fields: T[],
   order: readonly string[] = FILL_NEXT_TYPES,
@@ -32,7 +51,16 @@ export function nextUnfilledField<T extends { id: string; field_type: string; va
   const start = afterId ? actionable.findIndex((f) => f.id === afterId) + 1 : 0;
   for (let i = 0; i < actionable.length; i++) {
     const f = actionable[(start + i) % actionable.length];
-    if (!filled(f)) return f;
+    if (!filled(f) && f.id !== afterId) return f;
   }
-  return actionable[start % actionable.length] || null;
+  return null;
+}
+
+export function nextStepAfterStick<T extends { id: string; field_type: string; value?: string | null; localValue?: string | null }>(
+  fields: T[],
+  afterId?: string,
+): { kind: "fill"; field: T } | { kind: "place"; type: string } {
+  const unfilled = nextUnfilledField(fields, afterId);
+  if (unfilled && unfilled.id !== afterId) return { kind: "fill", field: unfilled };
+  return { kind: "place", type: nextUnplacedType(fields) };
 }

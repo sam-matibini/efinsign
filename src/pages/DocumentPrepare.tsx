@@ -14,10 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase, ChevronUp, ChevronDown, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase, ChevronUp, ChevronDown } from "lucide-react";
 import FieldFormatBar from "@/components/FieldFormatBar";
 import { decodeFieldValue, encodeFieldValue, EMPTY_FIELD_STYLE, type FieldStyle } from "@/lib/fieldStyle";
-import { nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
+import { nextStepAfterStick } from "@/lib/nextAction";
+import NextActionSelect from "@/components/NextActionSelect";
 import { readOrgSeal } from "@/lib/orgSeal";
 import { insertDocumentField, isSealField } from "@/lib/documentFields";
 import { isTextLikeField } from "@/lib/fieldFont";
@@ -382,18 +383,48 @@ export default function DocumentPrepare() {
     }
   };
 
-  const handleNextAction = () => {
-    const all = selfSignMode ? selfFields : fields;
-    const unfilled = nextUnfilledField(all);
-    if (unfilled && isTextLikeField(unfilled.field_type) && !isSealField(unfilled)) {
-      openFieldEditor(unfilled);
-      toast.message(`Next: ${unfilled.field_type.replaceAll("_", " ")}`);
+  const armPlacement = (fieldType: string) => {
+    if (!selfSignMode && !selectedSigner) {
+      toast.error("Select a signer first");
       return;
     }
-    const nextType = nextUnplacedType(all);
-    if (nextType === "text") openTextDialog("text");
-    else handleFieldTypeClick(nextType);
-    toast.message(`Next: place ${nextType.replaceAll("_", " ")}`);
+    setPendingFieldType(fieldType);
+  };
+
+  const startNextType = (fieldType: string) => {
+    if (fieldType === "text" || fieldType === "full_name" || fieldType === "title") {
+      openTextDialog(fieldType);
+    } else {
+      armPlacement(fieldType);
+    }
+    toast.message(`Text stuck. Next: place ${fieldType.replaceAll("_", " ")}`);
+  };
+
+  const handleNextAction = (afterId?: string) => {
+    const all = selfSignMode ? selfFields : fields;
+    const currentId = afterId || selectedFieldId || undefined;
+    setSelectedFieldId(null);
+    const step = nextStepAfterStick(all, currentId);
+    if (step.kind === "fill") {
+      if (isTextLikeField(step.field.field_type) && !isSealField(step.field)) {
+        openFieldEditor(step.field);
+        toast.message(`Text stuck. Next: ${step.field.field_type.replaceAll("_", " ")}`);
+        return;
+      }
+      setSelectedFieldId(step.field.id);
+      toast.message(`Text stuck. Next: ${step.field.field_type.replaceAll("_", " ")}`);
+      return;
+    }
+    startNextType(step.type);
+  };
+
+  const handleAdvanceFromField = (fieldId: string, nextType: string) => {
+    setSelectedFieldId(null);
+    if (nextType && nextType !== "auto") {
+      startNextType(nextType);
+      return;
+    }
+    handleNextAction(fieldId);
   };
 
   const handleFieldTypeClick = (fieldType: string) => {
@@ -719,6 +750,7 @@ export default function DocumentPrepare() {
               if (!field) return;
               resizeField(fieldId, field.width, stepFieldHeight(field.height, direction));
             }}
+            onAdvance={handleAdvanceFromField}
           />
         );
       });
@@ -819,6 +851,10 @@ export default function DocumentPrepare() {
               onCheckStyle={setCheckStyle}
               onPlaceSeal={(label) => { setPendingSeal(label); setPendingFieldType("seal"); }}
               onNext={handleNextAction}
+              onAdvance={(nextType) => {
+                if (nextType === "auto") handleNextAction();
+                else startNextType(nextType);
+              }}
             />
           ) : (
             <>
@@ -933,9 +969,15 @@ export default function DocumentPrepare() {
                     <p className="text-xs">Date: {accountDetails.dateLabel}</p>
                     <p className="text-[10px] text-muted-foreground">These fill Full Name, Title, Date, and Signature when you are the signer. Text wraps inside the field.</p>
                   </div>
-                  <Button variant="default" size="sm" className="w-full mb-3 gap-1.5" onClick={handleNextAction}>
-                    <ArrowRight className="h-3.5 w-3.5" /> Next action
-                  </Button>
+                  <div className="mb-3">
+                    <NextActionSelect
+                      onPick={(nextType) => {
+                        if (nextType === "auto") handleNextAction();
+                        else startNextType(nextType);
+                      }}
+                      label="Stick & next"
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                       <Button

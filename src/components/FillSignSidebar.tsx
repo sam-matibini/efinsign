@@ -6,6 +6,7 @@ import SignatureCapture from "@/components/SignatureCapture";
 import { PenTool, FileSignature, Calendar, Type, CheckSquare, X, Save, Trash2, Plus, Star, User, Briefcase } from "lucide-react";
 import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
 import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
+import NextActionSelect from "@/components/NextActionSelect";
 
 const SELF_SIGN_FIELD_TYPES = [
   { type: "signature", label: "Signature", icon: PenTool },
@@ -53,6 +54,7 @@ interface FillSignSidebarProps {
   onCheckStyle?: (style: CheckStyle) => void;
   onPlaceSeal?: (stampLabel: string) => void;
   onNext?: () => void;
+  onAdvance?: (nextType: string) => void;
 }
 
 export default function FillSignSidebar({
@@ -81,6 +83,7 @@ export default function FillSignSidebar({
   onCheckStyle,
   onPlaceSeal,
   onNext,
+  onAdvance,
 }: FillSignSidebarProps) {
   const [captureMode, setCaptureMode] = useState<"signature" | "initials" | null>(null);
   const [pickerMode, setPickerMode] = useState<"signature" | "initials" | null>(null);
@@ -288,10 +291,14 @@ export default function FillSignSidebar({
         </CardContent>
       </Card>
 
-      {onNext && (
-        <Button variant="default" className="w-full gap-1.5" onClick={onNext}>
-          Next
-        </Button>
+      {(onAdvance || onNext) && (
+        <NextActionSelect
+          onPick={(nextType) => {
+            if (onAdvance) onAdvance(nextType);
+            else if (nextType === "auto") onNext?.();
+          }}
+          label="Stick & next"
+        />
       )}
 
       {/* Action buttons */}
