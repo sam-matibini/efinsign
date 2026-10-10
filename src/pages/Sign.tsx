@@ -633,22 +633,20 @@ export default function Sign() {
 
   if (!reviewed) {
     return (
-      <div className="min-h-screen bg-background pb-12">
-        <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <img src={efinsignLogo} alt="eFinSign" className="h-8 w-8 rounded-lg object-contain" />
-            <span className="font-display font-bold text-lg">eFinSign</span>
-          </div>
-
-          <div>
-            <h1 className="text-2xl font-display font-bold">{doc?.title}</h1>
-            <p className="text-muted-foreground">
-              Hello {signer?.name}, please review the document below before signing.
+      <div className="h-[100dvh] flex flex-col bg-background animate-fade-in">
+        <header className="shrink-0 border-b border-border/60 bg-card/80 px-4 py-3 flex flex-wrap items-center gap-3">
+          <img src={efinsignLogo} alt="eFinSign" className="h-8 w-8 rounded-lg object-contain" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display font-bold text-lg truncate">{doc?.title}</h1>
+            <p className="text-sm text-muted-foreground truncate">
+              Hello {signer?.name}, review the full pages below before signing.
             </p>
           </div>
+        </header>
 
-          <Card className="bg-card/60 border-border/50">
-            <CardContent className="py-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="flex-1 flex min-h-0">
+          <aside className="hidden lg:flex w-72 shrink-0 flex-col gap-4 border-r border-border/60 bg-card/50 p-4 overflow-y-auto">
+            <div className="grid grid-cols-1 gap-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Fields to complete</p>
                 <p className="font-medium">{totalCount}</p>
@@ -669,105 +667,116 @@ export default function Sign() {
                   <p className="font-medium">{format(new Date(signer.expires_at), "PP")}</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card/60 border-border/50 overflow-hidden">
-            <div className="px-4 py-2 border-b border-border/50 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Document preview — scroll to read all pages</span>
             </div>
-            <div className="h-[70vh] overflow-auto bg-muted/20">
-              {pdfUrl ? (
-                <PdfViewer url={pdfUrl} className="w-full h-full" />
-              ) : pdfLoading ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  Loading document preview…
-                </div>
-              ) : pdfError ? (
-                <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
-                  <XCircle className="h-8 w-8 text-destructive" />
-                  <p className="text-sm text-muted-foreground">{pdfError}</p>
-                  <Button size="sm" variant="outline" onClick={loadSigningData}>Retry</Button>
-                </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Required actions</p>
+              {fields.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No fields were placed. You can still sign after review.</p>
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  No document preview available.
-                </div>
+                <ol className="space-y-1.5">
+                  {sortedFields.map((field, index) => (
+                    <li key={field.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left rounded-md border border-border/60 bg-background/80 px-2.5 py-2 text-sm hover:border-primary/40"
+                        onClick={() => document.querySelector(`[data-page="${field.page_number}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      >
+                        <span className="font-medium capitalize">{getFieldLabel(field.field_type)}</span>
+                        <span className="block text-xs text-muted-foreground">Page {field.page_number} · {index + 1} of {fields.length}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
               )}
             </div>
-          </Card>
+          </aside>
 
-          <Card className="bg-card/60 border-border/50">
-            <CardContent className="py-4 space-y-4">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-border"
-                  checked={consented}
-                  onChange={(e) => setConsented(e.target.checked)}
-                />
-                <span className="text-sm">
-                  I have reviewed this document and agree to electronically sign it.
-                </span>
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  className="flex-1"
-                  disabled={!consented}
-                  onClick={async () => {
-                    if (!pdfUrl) {
-                      const ok = window.confirm(
-                        "The document preview failed to load. Continue to signing anyway?"
-                      );
-                      if (!ok) return;
-                    }
-                    if (signer) {
-                      try {
-                        await sb.from("audit_logs").insert({
-                          document_id: signer.document_id,
-                          event_type: "reviewed",
-                          actor_email: signer.email,
-                        });
-                      } catch {}
-                    }
-                    setReviewed(true);
-                  }}
-                >
-                  Start signing
-                </Button>
-                <Button variant="outline" onClick={handleDecline}>
-                  Decline
-                </Button>
+          <main className="flex-1 min-w-0 min-h-0">
+            {pdfUrl ? (
+              <PdfViewer url={pdfUrl} className="h-full" fileName={doc?.title || "document.pdf"} nextTagLabel="Next page" />
+            ) : pdfLoading ? (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                Loading document preview…
               </div>
-            </CardContent>
-          </Card>
+            ) : pdfError ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <XCircle className="h-8 w-8 text-destructive" />
+                <p className="text-sm text-muted-foreground">{pdfError}</p>
+                <Button size="sm" variant="outline" onClick={loadSigningData}>Retry</Button>
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                No document preview available.
+              </div>
+            )}
+          </main>
         </div>
+
+        <footer className="shrink-0 border-t border-border/60 bg-card/95 px-4 py-3">
+          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
+            <label className="flex items-start gap-3 cursor-pointer flex-1">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-border"
+                checked={consented}
+                onChange={(e) => setConsented(e.target.checked)}
+              />
+              <span className="text-sm">
+                I have reviewed this document and agree to electronically sign it.
+              </span>
+            </label>
+            <div className="flex gap-2 sm:w-auto w-full">
+              <Button
+                className="flex-1 sm:flex-none min-w-40"
+                disabled={!consented}
+                onClick={async () => {
+                  if (!pdfUrl) {
+                    const ok = window.confirm(
+                      "The document preview failed to load. Continue to signing anyway?"
+                    );
+                    if (!ok) return;
+                  }
+                  if (signer) {
+                    try {
+                      await sb.from("audit_logs").insert({
+                        document_id: signer.document_id,
+                        event_type: "reviewed",
+                        actor_email: signer.email,
+                      });
+                    } catch {}
+                  }
+                  setReviewed(true);
+                }}
+              >
+                Start signing
+              </Button>
+              <Button variant="outline" onClick={handleDecline}>
+                Decline
+              </Button>
+            </div>
+          </div>
+        </footer>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
-        {/* Header */}
+    <div className="h-[100dvh] flex flex-col bg-background animate-fade-in">
+      <header className="shrink-0 border-b border-border/60 bg-card/80 px-4 py-3 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <img src={efinsignLogo} alt="eFinSign" className="h-8 w-8 rounded-lg object-contain" />
-            <span className="font-display font-bold text-lg">eFinSign</span>
+            <div className="min-w-0">
+              <h1 className="font-display font-bold text-lg truncate">{doc?.title}</h1>
+              <p className="text-sm text-muted-foreground truncate">Hello {signer.name}, fill the highlighted fields, then submit.</p>
+            </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setReviewed(false)}>
             Back to review
           </Button>
         </div>
-
-        <div>
-          <h1 className="text-2xl font-display font-bold">{doc?.title}</h1>
-          <p className="text-muted-foreground">Hello {signer.name}, please review and fill all fields below, then submit.</p>
-        </div>
-
-        {/* Progress */}
         {totalCount > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{filledCount} of {totalCount} fields completed</span>
               <span className="font-medium">{Math.round((filledCount / totalCount) * 100)}%</span>
@@ -775,45 +784,44 @@ export default function Sign() {
             <Progress value={(filledCount / totalCount) * 100} className="h-2" />
           </div>
         )}
+      </header>
 
-        {/* Timestamp preference */}
-        <Card className="bg-card/40 border-border/50">
-          <CardContent className="py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <Label htmlFor="ts-toggle-top" className="text-sm font-medium cursor-pointer">
-                  Include signing timestamp
-                </Label>
-                <p className="text-xs text-muted-foreground">Adds the date and time below your signature in the final PDF.</p>
-              </div>
-            </div>
-            <Switch id="ts-toggle-top" checked={includeTimestamp} onCheckedChange={setIncludeTimestamp} />
-          </CardContent>
-        </Card>
-
-        {/* PDF with field overlays */}
+      <div className={`flex-1 min-h-0 ${totalCount > 0 ? "pb-16" : ""}`}>
         {pdfUrl && (
-          <Card className="bg-card/60 border-border/50 overflow-hidden">
-            <PdfViewer
-              url={pdfUrl}
-              className="w-full"
-              renderPageOverlay={renderPageOverlay}
-              nextTagLabel="Next"
-              onNextFromPage={(pageNumber) => {
-                if (nextUnfilledField && nextUnfilledField.page_number > pageNumber) {
-                  setHighlightedFieldId(nextUnfilledField.id);
-                  scrollToField(nextUnfilledField.id);
-                  return;
-                }
-                document.querySelector(`[data-page="${pageNumber + 1}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            />
-          </Card>
+          <PdfViewer
+            url={pdfUrl}
+            className="h-full"
+            fileName={doc?.title || "document.pdf"}
+            renderPageOverlay={renderPageOverlay}
+            nextTagLabel="Next"
+            onNextFromPage={(pageNumber) => {
+              if (nextUnfilledField && nextUnfilledField.page_number > pageNumber) {
+                setHighlightedFieldId(nextUnfilledField.id);
+                scrollToField(nextUnfilledField.id);
+                return;
+              }
+              document.querySelector(`[data-page="${pageNumber + 1}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
         )}
+      </div>
 
-        {/* If no fields placed, show standalone signature capture */}
-        {totalCount === 0 && (
+      {totalCount === 0 && (
+        <div className="shrink-0 border-t border-border/60 bg-card p-4 space-y-3">
+          <Card className="bg-card/40 border-border/50">
+            <CardContent className="py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Label htmlFor="ts-toggle-top" className="text-sm font-medium cursor-pointer">
+                    Include signing timestamp
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Adds the date and time below your signature in the final PDF.</p>
+                </div>
+              </div>
+              <Switch id="ts-toggle-top" checked={includeTimestamp} onCheckedChange={setIncludeTimestamp} />
+            </CardContent>
+          </Card>
           <Card className="bg-card/60 border-border/50">
             <CardHeader>
               <CardTitle className="font-display">Your Signature</CardTitle>
@@ -845,19 +853,16 @@ export default function Sign() {
               />
             </CardContent>
           </Card>
-        )}
-
-        {totalCount === 0 && (
           <Button variant="outline" onClick={handleDecline}>
             Decline
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Sticky bottom navigation bar */}
       {totalCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg z-50">
-          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               {allFieldsFilled ? (
                 <p className="text-sm font-medium text-green-600 flex items-center gap-1.5">

@@ -297,8 +297,8 @@ function EmbedSignInner() {
           )}
 
           {pdfUrl && !pdfLoading && (
-            <div className="w-full max-h-[400px] border rounded overflow-hidden">
-              <PdfViewer url={pdfUrl} height={400} onFieldValues={() => {}} fields={[]} />
+            <div className="w-full h-[min(72vh,820px)] border rounded overflow-hidden">
+              <PdfViewer url={pdfUrl} className="h-full" fileName={doc?.title || "document.pdf"} />
             </div>
           )}
 
@@ -362,25 +362,12 @@ function EmbedSignInner() {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row">
-        <div className="flex-1 min-h-[500px]">
+        <div className="flex-1 min-h-[70vh]">
           {pdfUrl ? (
             <PdfViewer
               url={pdfUrl}
-              height={600}
-              onFieldValues={() => {}}
-              fields={fields
-                .filter((f) => f.localValue)
-                .map((f) => ({
-                  id: f.id,
-                  field_type: f.field_type,
-                  page_number: f.page_number,
-                  x: Number(f.x),
-                  y: Number(f.y),
-                  width: Number(f.width),
-                  height: Number(f.height),
-                  value: f.localValue || "",
-                  label: f.label || null,
-                }))}
+              className="h-full min-h-[70vh]"
+              fileName={doc?.title || "document.pdf"}
             />
           ) : pdfLoading ? (
             <div className="flex items-center justify-center h-full">

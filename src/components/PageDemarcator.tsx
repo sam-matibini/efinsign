@@ -8,7 +8,7 @@ interface PageDemarcatorProps {
 /** Marks the boundary of a page and, when needed, points to the next action. */
 export default function PageDemarcator({ page, total, onNext, nextLabel }: PageDemarcatorProps) {
   return (
-    <div className="flex items-center gap-3 w-full max-w-[820px] py-3 select-none" data-page-demarcator={page}>
+    <div className="flex items-center gap-3 w-full max-w-5xl py-3 select-none" data-page-demarcator={page}>
       <div className="h-px flex-1 bg-border" />
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">

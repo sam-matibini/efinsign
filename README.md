@@ -18,6 +18,8 @@ The Vite app starts on port 8080 by default. Open Edit PDF on a document to use 
 
 Save PDF still burns in-progress text and uses the existing storage fallback.
 
+Signing review uses a full-height preview that fits each page to the window. Zoom, fit width/page, find, download, print, and full screen work like a typical e-sign reader. Required fields are listed on the left and jump to that page.
+
 After signing, **Close** leaves the completion screen (it cannot force-close a tab the browser opened, so it returns to the landing page). Company seals are chosen in **Settings**, can include a logo icon in the center, and are appended on prepare/fill-and-sign. Signatures and seals drag, snap, resize, and nudge left/right/up/down. Deploy the latest `supabase/migrations` so profile save and org seals persist in the hosted database.
 
 ## Project info
