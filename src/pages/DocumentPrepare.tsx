@@ -19,6 +19,7 @@ import FieldFormatBar from "@/components/FieldFormatBar";
 import { decodeFieldValue, encodeFieldValue, EMPTY_FIELD_STYLE, type FieldStyle } from "@/lib/fieldStyle";
 import { nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
 import { readOrgSeal } from "@/lib/orgSeal";
+import { insertDocumentField, isSealField } from "@/lib/documentFields";
 import { isTextLikeField } from "@/lib/fieldFont";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables } from "@/integrations/supabase/types";
@@ -149,9 +150,9 @@ export default function DocumentPrepare() {
       const stamp = readOrgSeal(currentOrg?.id, currentOrg?.seal_stamp);
       const loadedFields = fieldsRes.data || [];
       const signerId = signersRes.data?.[0]?.id;
-      if (stamp && signerId && id && !sealAppendedRef.current && !loadedFields.some((f) => f.field_type === "seal")) {
+      if (stamp && signerId && id && !sealAppendedRef.current && !loadedFields.some((f) => isSealField(f))) {
         sealAppendedRef.current = true;
-        const { data: sealField } = await supabase.from("document_fields").insert({
+        const { data: sealField, error: sealError } = await insertDocumentField({
           document_id: id,
           signer_id: signerId,
           field_type: "seal",
@@ -161,8 +162,13 @@ export default function DocumentPrepare() {
           width: 140,
           height: 140,
           value: stamp,
-        }).select().single();
-        if (sealField) setFields((prev) => [...prev, sealField]);
+        });
+        if (sealError) {
+          sealAppendedRef.current = false;
+          toast.error(sealError.message);
+        } else if (sealField) {
+          setFields((prev) => [...prev, sealField]);
+        }
       }
     };
     load();
@@ -405,42 +411,34 @@ export default function DocumentPrepare() {
         // Self-sign mode: use selfSigner
         if (!selfSigner) return;
         const dims = dimsFor(pendingFieldType);
-        const { data, error } = await supabase
-          .from("document_fields")
-          .insert({
-            document_id: id,
-            signer_id: selfSigner.id,
-            field_type: pendingFieldType,
-            page_number: pageNumber,
-            x,
-            y,
-            width: dims.w,
-            height: dims.h,
-            ...placedExtras(pendingFieldType, true, selfSigner.email),
-          })
-          .select()
-          .single();
+        const { data, error } = await insertDocumentField({
+          document_id: id,
+          signer_id: selfSigner.id,
+          field_type: pendingFieldType,
+          page_number: pageNumber,
+          x,
+          y,
+          width: dims.w,
+          height: dims.h,
+          ...placedExtras(pendingFieldType, true, selfSigner.email),
+        });
         if (error) { toast.error(error.message); return; }
         setSelfFields((prev) => [...prev, data]);
       } else {
         // Prepare mode: use selectedSigner
         if (!selectedSigner) return;
         const dims = dimsFor(pendingFieldType);
-        const { data, error } = await supabase
-          .from("document_fields")
-          .insert({
-            document_id: id,
-            signer_id: selectedSigner,
-            field_type: pendingFieldType,
-            page_number: pageNumber,
-            x,
-            y,
-            width: dims.w,
-            height: dims.h,
-            ...placedExtras(pendingFieldType, false, signers.find((s) => s.id === selectedSigner)?.email),
-          })
-          .select()
-          .single();
+        const { data, error } = await insertDocumentField({
+          document_id: id,
+          signer_id: selectedSigner,
+          field_type: pendingFieldType,
+          page_number: pageNumber,
+          x,
+          y,
+          width: dims.w,
+          height: dims.h,
+          ...placedExtras(pendingFieldType, false, signers.find((s) => s.id === selectedSigner)?.email),
+        });
         if (error) { toast.error(error.message); return; }
         setFields((prev) => [...prev, data]);
       }
@@ -458,39 +456,31 @@ export default function DocumentPrepare() {
         if (fieldType === "signature" && !savedSignature) { toast.error("Create a signature first"); return; }
         if (fieldType === "initials" && !savedInitials) { toast.error("Create initials first"); return; }
         const dims = dimsFor(fieldType);
-        const { data, error } = await supabase
-          .from("document_fields")
-          .insert({
-            document_id: id,
-            signer_id: selfSigner.id,
-            field_type: fieldType,
-            page_number: pageNumber,
-            x, y,
-            width: dims.w,
-            height: dims.h,
-            ...placedExtras(fieldType, true, selfSigner.email, sealLabel),
-          })
-          .select()
-          .single();
+        const { data, error } = await insertDocumentField({
+          document_id: id,
+          signer_id: selfSigner.id,
+          field_type: fieldType,
+          page_number: pageNumber,
+          x, y,
+          width: dims.w,
+          height: dims.h,
+          ...placedExtras(fieldType, true, selfSigner.email, sealLabel),
+        });
         if (error) { toast.error(error.message); return; }
         setSelfFields((prev) => [...prev, data]);
       } else {
         if (!selectedSigner) { toast.error("Select a signer first"); return; }
         const dims = dimsFor(fieldType);
-        const { data, error } = await supabase
-          .from("document_fields")
-          .insert({
-            document_id: id,
-            signer_id: selectedSigner,
-            field_type: fieldType,
-            page_number: pageNumber,
-            x, y,
-            width: dims.w,
-            height: dims.h,
-            ...placedExtras(fieldType, false, signers.find((s) => s.id === selectedSigner)?.email, sealLabel),
-          })
-          .select()
-          .single();
+        const { data, error } = await insertDocumentField({
+          document_id: id,
+          signer_id: selectedSigner,
+          field_type: fieldType,
+          page_number: pageNumber,
+          x, y,
+          width: dims.w,
+          height: dims.h,
+          ...placedExtras(fieldType, false, signers.find((s) => s.id === selectedSigner)?.email, sealLabel),
+        });
         if (error) { toast.error(error.message); return; }
         setFields((prev) => [...prev, data]);
       }
@@ -1020,7 +1010,7 @@ export default function DocumentPrepare() {
                           <div key={f.id} className="flex items-center justify-between text-sm py-1">
                             <div className="flex items-center gap-2">
                               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: signer?.color }} />
-                              <span className="capitalize">{f.field_type.replaceAll("_", " ")}</span>
+                              <span className="capitalize">{isSealField(f) ? "seal" : f.field_type.replaceAll("_", " ")}</span>
                               {f.value && !f.value.startsWith("data:") && (
                                 <span className="text-[10px] text-muted-foreground truncate max-w-[7rem]">{f.value}</span>
                               )}

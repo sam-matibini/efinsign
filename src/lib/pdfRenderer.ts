@@ -173,7 +173,7 @@ export async function generateSignedPdf(
     const pdfW = field.width / SCALE;
     const pdfH = field.height / SCALE;
 
-    if (field.field_type === "seal") {
+    if (field.field_type === "seal" || sealByStampLabel(field.value)) {
       const seal = sealByStampLabel(field.value);
       if (!seal) continue;
       const png = await svgToPngBytes(companySealSvg(seal.id));

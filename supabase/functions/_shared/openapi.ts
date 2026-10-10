@@ -446,7 +446,7 @@ export const openapiSpec = {
           id: { type: "string", format: "uuid" },
           document_id: { type: "string", format: "uuid" },
           signer_id: { type: "string", format: "uuid" },
-          field_type: { type: "string", enum: ["signature", "initials", "name", "date", "text", "checkbox", "checkmark", "full_name", "title"] },
+          field_type: { type: "string", enum: ["signature", "initials", "name", "date", "text", "checkbox", "checkmark", "full_name", "title", "seal"] },
           page_number: { type: "integer" },
           x: { type: "number" },
           y: { type: "number" },

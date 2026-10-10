@@ -187,7 +187,7 @@ export default function DraggableField({
       onMouseLeave={() => setHovered(false)}
     >
       <div className="w-full h-full overflow-hidden flex items-center justify-center pointer-events-none">
-        {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal") && (value?.startsWith("data:image") || seal) ? (
+        {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal" || seal) && (value?.startsWith("data:image") || seal) ? (
           <img src={seal ? companySealDataUrl(seal.id) : value!} alt={fieldType} className="w-full h-full object-contain" draggable={false} />
         ) : check?.filled ? (
           <span className="font-bold text-green-700 leading-none" style={{ fontSize: textSize }}>{checkGlyph(check.style)}</span>
