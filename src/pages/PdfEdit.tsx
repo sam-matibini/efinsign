@@ -11,6 +11,7 @@ import AnnotationOverlay, { annotationBox } from "@/components/pdf-editor/Annota
 import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
+import { saveEditedPdfBlob } from "@/lib/saveEditedPdf";
 import type { Annotation, DrawingAnnotation, TextAnnotation, ToolMode, ShapeType, PageState, TextAlign } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { alignRectToPage, clampRect, defaultTextBoxHeight, DEFAULT_TEXT_BOX_WIDTH, nudgeRect } from "@/lib/textLayout";
@@ -403,8 +404,7 @@ export default function PdfEdit() {
     try {
       const pdfBytes = await savePdfDocument(pdfUrl, pages, annotations, canvasRefs.current);
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-      const { error } = await supabase.storage.from("documents").upload(doc.file_path, blob, { upsert: true });
-      if (error) throw error;
+      await saveEditedPdfBlob(doc.id, doc.file_path, blob);
       toast.success("PDF saved successfully");
       navigate(`/documents/${id}`);
     } catch (err: any) {
