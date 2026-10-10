@@ -6,10 +6,13 @@ import StampPicker from "@/components/StampPicker";
 import {
   ArrowLeft, Type, Paintbrush, Stamp, Save, Loader2, MousePointer,
   Check, Highlighter, Shapes, ImageIcon, Square, Circle, Minus,
-  Undo2, Redo2, Eraser, Droplets, PanelTop, Bold
+  Undo2, Redo2, Eraser, Droplets, PanelTop, Bold, Italic, Underline,
+  Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered,
+  PenTool, StickyNote, Triangle, Diamond, ArrowRight, Radius,
 } from "lucide-react";
-import type { EditorFont, ToolMode, ShapeType } from "./types";
+import type { EditorFont, ListStyle, ToolMode, ShapeType, TextAlign } from "./types";
 import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
+import { EDITOR_FONTS, HIGHLIGHT_BG_PRESETS, LINE_SPACING } from "@/lib/editorFonts";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -26,10 +29,24 @@ interface PdfEditorToolbarProps {
   setFontSize: (s: number) => void;
   textColor: string;
   setTextColor: (c: string) => void;
+  textBackground: string;
+  setTextBackground: (c: string) => void;
   textFont: EditorFont;
   setTextFont: (f: EditorFont) => void;
   textBold: boolean;
   setTextBold: (b: boolean) => void;
+  textItalic: boolean;
+  setTextItalic: (b: boolean) => void;
+  textUnderline: boolean;
+  setTextUnderline: (b: boolean) => void;
+  textStrike: boolean;
+  setTextStrike: (b: boolean) => void;
+  textAlign: TextAlign;
+  setTextAlign: (a: TextAlign) => void;
+  lineHeight: number;
+  setLineHeight: (n: number) => void;
+  listStyle: ListStyle;
+  setListStyle: (s: ListStyle) => void;
   drawColor: string;
   setDrawColor: (c: string) => void;
   strokeWidth: number;
@@ -68,7 +85,10 @@ interface PdfEditorToolbarProps {
 export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
   const {
     docTitle, tool, setTool, fontSize, setFontSize,
-    textColor, setTextColor, textFont, setTextFont, textBold, setTextBold,
+    textColor, setTextColor, textBackground, setTextBackground,
+    textFont, setTextFont, textBold, setTextBold,
+    textItalic, setTextItalic, textUnderline, setTextUnderline, textStrike, setTextStrike,
+    textAlign, setTextAlign, lineHeight, setLineHeight, listStyle, setListStyle,
     drawColor, setDrawColor, strokeWidth, setStrokeWidth,
     selectedStamp, setSelectedStamp, checkmarkSize, setCheckmarkSize,
     checkStyle, setCheckStyle, onBumpFont,
@@ -89,6 +109,8 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     { mode: "checkmark", icon: Check, label: "Check" },
     { mode: "highlight", icon: Highlighter, label: "Highlight" },
     { mode: "shape", icon: Shapes, label: "Shape" },
+    { mode: "signature", icon: PenTool, label: "Signature" },
+    { mode: "sticky", icon: StickyNote, label: "Next" },
     { mode: "image", icon: ImageIcon, label: "Image" },
   ];
 
@@ -101,7 +123,6 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
       <h2 className="font-semibold text-sm truncate max-w-48">{docTitle}</h2>
       <div className="h-6 w-px bg-border" />
 
-      {/* Undo/Redo */}
       <Button variant="ghost" size="sm" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" className="h-8 w-8 p-0">
         <Undo2 className="h-4 w-4" />
       </Button>
@@ -110,7 +131,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
       </Button>
       <div className="h-6 w-px bg-border" />
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         {tools.map(({ mode, icon: Icon, label }) => (
           <Button
             key={mode}
@@ -124,40 +145,103 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         ))}
       </div>
 
-      {/* Text options */}
       {tool === "text" && (
-        <div className="flex items-center gap-2">
-          <Label className="text-xs">Size:</Label>
-          <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
-            <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Select value={textFont} onValueChange={(v) => setTextFont(v as EditorFont)}>
+            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 60, 72].map((s) => (
-                <SelectItem key={s} value={String(s)}>{s}px</SelectItem>
+              {EDITOR_FONTS.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  <span style={{ fontFamily: f.css }}>{f.label}</span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => onBumpFont(-2)} title="Smaller text">A−</Button>
-          <Button variant="outline" size="sm" className="h-8 px-2 text-sm font-semibold" onClick={() => onBumpFont(2)} title="Larger text">A+</Button>
-          <Select value={textFont} onValueChange={(v) => setTextFont(v as EditorFont)}>
-            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+          <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
+            <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="helvetica">Helvetica</SelectItem>
-              <SelectItem value="times">Times</SelectItem>
-              <SelectItem value="courier">Courier</SelectItem>
+              {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 60, 72].map((s) => (
+                <SelectItem key={s} value={String(s)}>{s}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Button
-            variant={textBold ? "default" : "ghost"}
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setTextBold(!textBold)}
-            title="Bold"
-          >
+          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={() => onBumpFont(-2)} title="Decrease font size">A−</Button>
+          <Button variant="outline" size="sm" className="h-8 px-2 text-sm font-semibold" onClick={() => onBumpFont(2)} title="Increase font size">A+</Button>
+          <div className="h-6 w-px bg-border" />
+          <Button variant={textBold ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" onClick={() => setTextBold(!textBold)} title="Bold">
             <Bold className="h-3.5 w-3.5" />
           </Button>
-          <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" title="Text color" />
+          <Button variant={textItalic ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" onClick={() => setTextItalic(!textItalic)} title="Italic">
+            <Italic className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant={textUnderline ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" onClick={() => setTextUnderline(!textUnderline)} title="Underline">
+            <Underline className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant={textStrike ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" onClick={() => setTextStrike(!textStrike)} title="Strikethrough">
+            <Strikethrough className="h-3.5 w-3.5" />
+          </Button>
+          <div className="h-6 w-px bg-border" />
+          <label className="flex items-center gap-1 text-[10px] text-muted-foreground" title="Text color">
+            A
+            <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" />
+          </label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="h-7 w-7 rounded border border-border"
+                style={{ backgroundColor: textBackground === "none" ? "#ffffff" : textBackground }}
+                title="Text background"
+              />
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2 flex gap-1">
+              {HIGHLIGHT_BG_PRESETS.map((c) => (
+                <button
+                  key={c.value}
+                  className="h-6 w-6 rounded border border-border"
+                  style={{
+                    backgroundColor: c.value === "none" ? "transparent" : c.value,
+                    backgroundImage: c.value === "none" ? "repeating-linear-gradient(45deg,transparent,transparent 3px,hsl(var(--muted)) 3px,hsl(var(--muted)) 6px)" : undefined,
+                  }}
+                  title={c.label}
+                  onClick={() => setTextBackground(c.value)}
+                />
+              ))}
+              <input type="color" value={textBackground === "none" ? "#fef08a" : textBackground} onChange={(e) => setTextBackground(e.target.value)} className="h-6 w-6 rounded" title="Custom background" />
+            </PopoverContent>
+          </Popover>
+          <div className="h-6 w-px bg-border" />
+          {([
+            ["left", AlignLeft],
+            ["center", AlignCenter],
+            ["right", AlignRight],
+          ] as const).map(([value, Icon]) => (
+            <Button key={value} variant={textAlign === value ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" title={`Align ${value}`} onClick={() => setTextAlign(value)}>
+              <Icon className="h-3.5 w-3.5" />
+            </Button>
+          ))}
+          <Select value={String(lineHeight)} onValueChange={(v) => setLineHeight(Number(v))}>
+            <SelectTrigger className="h-8 w-16 text-xs" title="Line spacing"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {LINE_SPACING.map((s) => (
+                <SelectItem key={s.value} value={String(s.value)}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant={listStyle === "bullet" ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" title="Bullets" onClick={() => setListStyle(listStyle === "bullet" ? "none" : "bullet")}>
+            <List className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant={listStyle === "number" ? "default" : "ghost"} size="sm" className="h-8 w-8 p-0" title="Numbered list" onClick={() => setListStyle(listStyle === "number" ? "none" : "number")}>
+            <ListOrdered className="h-3.5 w-3.5" />
+          </Button>
           <span className="text-[10px] text-muted-foreground max-w-40 leading-tight">Wraps inside the box. Double-click to edit.</span>
         </div>
+      )}
+
+      {tool === "signature" && (
+        <span className="text-[10px] text-muted-foreground">Click the page to place a signature box. Double-click the box to draw or type a signature.</span>
+      )}
+      {tool === "sticky" && (
+        <span className="text-[10px] text-muted-foreground">Click to drop a Next sticky note that tells people where to sign or type.</span>
       )}
 
       <Popover>
@@ -174,7 +258,6 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </PopoverContent>
       </Popover>
 
-      {/* Draw options */}
       {tool === "draw" && (
         <div className="flex items-center gap-2">
           <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" />
@@ -190,10 +273,8 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
-      {/* Stamp options */}
       {tool === "stamp" && <StampPicker selected={selectedStamp} onSelect={setSelectedStamp} />}
 
-      {/* Checkmark options */}
       {tool === "checkmark" && (
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
@@ -222,7 +303,6 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
-      {/* Highlight options */}
       {tool === "highlight" && (
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
@@ -246,16 +326,20 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
-      {/* Shape options */}
       {tool === "shape" && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
             {([
-              { t: "rect" as ShapeType, icon: Square },
-              { t: "circle" as ShapeType, icon: Circle },
-              { t: "line" as ShapeType, icon: Minus },
-            ]).map(({ t, icon: Icon }) => (
-              <Button key={t} variant={shapeType === t ? "default" : "ghost"} size="sm" className="h-7 w-7 p-0" onClick={() => setShapeType(t)}>
+              { t: "rect" as ShapeType, icon: Square, label: "Rectangle" },
+              { t: "rounded" as ShapeType, icon: Radius, label: "Rounded" },
+              { t: "circle" as ShapeType, icon: Circle, label: "Circle" },
+              { t: "ellipse" as ShapeType, icon: Circle, label: "Ellipse" },
+              { t: "line" as ShapeType, icon: Minus, label: "Line" },
+              { t: "triangle" as ShapeType, icon: Triangle, label: "Triangle" },
+              { t: "diamond" as ShapeType, icon: Diamond, label: "Diamond" },
+              { t: "arrow" as ShapeType, icon: ArrowRight, label: "Arrow" },
+            ]).map(({ t, icon: Icon, label }) => (
+              <Button key={t} variant={shapeType === t ? "default" : "ghost"} size="sm" className="h-7 w-7 p-0" title={label} onClick={() => setShapeType(t)}>
                 <Icon className="h-3.5 w-3.5" />
               </Button>
             ))}
@@ -285,7 +369,6 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
-      {/* Image upload */}
       {tool === "image" && (
         <div className="flex items-center gap-2">
           <Label htmlFor="img-upload" className="text-xs cursor-pointer bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md hover:bg-secondary/80">

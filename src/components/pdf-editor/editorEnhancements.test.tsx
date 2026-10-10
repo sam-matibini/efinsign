@@ -11,10 +11,24 @@ const toolbarProps = {
   setFontSize: vi.fn(),
   textColor: "#111827",
   setTextColor: vi.fn(),
+  textBackground: "none",
+  setTextBackground: vi.fn(),
   textFont: "helvetica" as const,
   setTextFont: vi.fn(),
   textBold: false,
   setTextBold: vi.fn(),
+  textItalic: false,
+  setTextItalic: vi.fn(),
+  textUnderline: false,
+  setTextUnderline: vi.fn(),
+  textStrike: false,
+  setTextStrike: vi.fn(),
+  textAlign: "left" as const,
+  setTextAlign: vi.fn(),
+  lineHeight: 1.15,
+  setLineHeight: vi.fn(),
+  listStyle: "none" as const,
+  setListStyle: vi.fn(),
   drawColor: "#000",
   setDrawColor: vi.fn(),
   strokeWidth: 2,
@@ -60,6 +74,20 @@ describe("PDF editor enhancements", () => {
     fireEvent.click(screen.getByRole("button", { name: "More" }));
     fireEvent.click(screen.getByRole("button", { name: "Watermark" }));
     expect(toolbarProps.onOpenWatermark).toHaveBeenCalled();
+  });
+
+  it("adds Word-like text controls, extra shapes, signature, and Next sticky", () => {
+    const { rerender } = render(<PdfEditorToolbar {...toolbarProps} />);
+    expect(screen.getByTitle("Italic")).toBeInTheDocument();
+    expect(screen.getByTitle("Underline")).toBeInTheDocument();
+    expect(screen.getByTitle("Text background")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Signature" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    rerender(<PdfEditorToolbar {...toolbarProps} tool="shape" />);
+    expect(screen.getByTitle("Triangle")).toBeInTheDocument();
+    expect(screen.getByTitle("Diamond")).toBeInTheDocument();
+    expect(screen.getByTitle("Arrow")).toBeInTheDocument();
+    expect(screen.getByTitle("Rounded")).toBeInTheDocument();
   });
 });
 

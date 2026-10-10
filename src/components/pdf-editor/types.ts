@@ -1,14 +1,26 @@
 import type { CheckStyle } from "@/lib/checkStyles";
+import type { EditorFont } from "@/lib/editorFonts";
 import type { TextAlign } from "@/lib/textLayout";
 
-export type { TextAlign };
+export type { TextAlign, EditorFont };
 
 export type { CheckStyle };
-export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image" | "whiteout";
+export type ToolMode =
+  | "select"
+  | "text"
+  | "draw"
+  | "stamp"
+  | "checkmark"
+  | "highlight"
+  | "shape"
+  | "image"
+  | "whiteout"
+  | "signature"
+  | "sticky";
 
-export type ShapeType = "rect" | "circle" | "line";
+export type ShapeType = "rect" | "rounded" | "circle" | "ellipse" | "line" | "triangle" | "diamond" | "arrow";
 
-export type EditorFont = "helvetica" | "times" | "courier";
+export type ListStyle = "none" | "bullet" | "number";
 
 interface BaseAnnotation {
   id: string;
@@ -25,8 +37,14 @@ export interface TextAnnotation extends BaseAnnotation {
   width?: number;
   height?: number;
   color?: string;
+  backgroundColor?: string;
   fontFamily?: EditorFont;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  lineHeight?: number;
+  listStyle?: ListStyle;
   opacity?: number;
   rotate?: number;
   align?: TextAlign;
@@ -83,6 +101,21 @@ export interface WhiteoutAnnotation extends BaseAnnotation {
   height: number;
 }
 
+export interface SignatureAnnotation extends BaseAnnotation {
+  type: "signature";
+  width: number;
+  height: number;
+  imageData?: string;
+}
+
+export interface StickyNoteAnnotation extends BaseAnnotation {
+  type: "sticky";
+  width: number;
+  height: number;
+  text: string;
+  color?: string;
+}
+
 export type Annotation =
   | TextAnnotation
   | StampAnnotation
@@ -91,7 +124,9 @@ export type Annotation =
   | HighlightAnnotation
   | ShapeAnnotation
   | ImageAnnotation
-  | WhiteoutAnnotation;
+  | WhiteoutAnnotation
+  | SignatureAnnotation
+  | StickyNoteAnnotation;
 
 export interface PageState {
   pageNum: number;

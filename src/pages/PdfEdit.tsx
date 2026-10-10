@@ -16,14 +16,17 @@ import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
 import { saveEditedPdfBlob } from "@/lib/saveEditedPdf";
 import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
-import type { Annotation, DrawingAnnotation, EditorFont, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
+import type { Annotation, DrawingAnnotation, EditorFont, ListStyle, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState, SignatureAnnotation, StickyNoteAnnotation } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 import { defaultTextBoxHeight, nudgeRect } from "@/lib/textLayout";
+import { editorFontCss } from "@/lib/editorFonts";
 import { textAnnotationFromEditor, withPendingText } from "@/lib/pendingText";
 import type { CheckStyle } from "@/lib/checkStyles";
 import { sealByStampLabel } from "@/lib/companySeals";
 import PageDemarcator from "@/components/PageDemarcator";
+import SignatureCapture from "@/components/SignatureCapture";
+import { Textarea } from "@/components/ui/textarea";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -91,8 +94,17 @@ export default function PdfEdit() {
   const [tool, setTool] = useState<ToolMode>("select");
   const [fontSize, setFontSize] = useState(14);
   const [textColor, setTextColor] = useState("#111827");
+  const [textBackground, setTextBackground] = useState("none");
   const [textFont, setTextFont] = useState<EditorFont>("helvetica");
   const [textBold, setTextBold] = useState(false);
+  const [textItalic, setTextItalic] = useState(false);
+  const [textUnderline, setTextUnderline] = useState(false);
+  const [textStrike, setTextStrike] = useState(false);
+  const [textAlign, setTextAlign] = useState<TextAlign>("left");
+  const [lineHeight, setLineHeight] = useState(1.15);
+  const [listStyle, setListStyle] = useState<ListStyle>("none");
+  const [signatureTargetId, setSignatureTargetId] = useState<string | null>(null);
+  const [stickyEditor, setStickyEditor] = useState<{ id: string; text: string } | null>(null);
   const [drawColor, setDrawColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
@@ -246,9 +258,30 @@ export default function PdfEdit() {
           pageIndex, x, y,
           width: DEFAULT_TEXT_BOX_WIDTH,
           height: defaultTextBoxHeight(fontSize),
-          align: "left",
+          align: textAlign,
         });
         setTextValue("");
+      } else if (tool === "signature") {
+        const id = genId();
+        setAnnotations((prev) => [...prev, {
+          type: "signature", id, pageIndex, x, y, width: 220, height: 72,
+        }]);
+        setSelectedAnnotationId(id);
+        setSignatureTargetId(id);
+      } else if (tool === "sticky") {
+        const id = genId();
+        setAnnotations((prev) => [...prev, {
+          type: "sticky",
+          id,
+          pageIndex,
+          x,
+          y,
+          width: 170,
+          height: 92,
+          text: "Sign or complete the next action here.",
+          color: "#fde047",
+        }]);
+        setSelectedAnnotationId(id);
       } else if (tool === "stamp" && selectedStamp) {
         const seal = sealByStampLabel(selectedStamp);
         setAnnotations((prev) => [...prev, {
@@ -261,7 +294,7 @@ export default function PdfEdit() {
         setAnnotations((prev) => [...prev, { type: "image", id: genId(), pageIndex, x, y, width: 150, height: 150, imageData: pendingImage }]);
       }
     },
-    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize]
+    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize, textAlign]
   );
 
   const textCommitRef = useRef(false);
@@ -272,10 +305,16 @@ export default function PdfEdit() {
       text: textValue,
       fontSize,
       color: textColor,
+      backgroundColor: textBackground,
       fontFamily: textFont,
       bold: textBold,
+      italic: textItalic,
+      underline: textUnderline,
+      strikethrough: textStrike,
+      lineHeight,
+      listStyle,
     });
-  }, [editingText, textValue, fontSize, textColor, textFont, textBold]);
+  }, [editingText, textValue, fontSize, textColor, textBackground, textFont, textBold, textItalic, textUnderline, textStrike, lineHeight, listStyle]);
 
   const confirmText = useCallback(() => {
     if (textCommitRef.current) return;
@@ -292,8 +331,15 @@ export default function PdfEdit() {
     setTool("select");
     setFontSize(ann.fontSize);
     if (ann.color) setTextColor(ann.color);
+    setTextBackground(ann.backgroundColor || "none");
     if (ann.fontFamily) setTextFont(ann.fontFamily);
     setTextBold(!!ann.bold);
+    setTextItalic(!!ann.italic);
+    setTextUnderline(!!ann.underline);
+    setTextStrike(!!ann.strikethrough);
+    setTextAlign(ann.align ?? "left");
+    setLineHeight(ann.lineHeight ?? 1.15);
+    setListStyle(ann.listStyle ?? "none");
     setTextValue(ann.text);
     setEditingText({
       pageIndex: ann.pageIndex,
@@ -305,6 +351,16 @@ export default function PdfEdit() {
       align: ann.align ?? "left",
     });
   }, []);
+
+  const patchSelectedText = useCallback((patch: Partial<TextAnnotation>) => {
+    if (!selectedAnnotationId) return;
+    setAnnotations((prev) => prev.map((a) => (
+      a.id === selectedAnnotationId && a.type === "text" ? { ...a, ...patch } : a
+    )));
+    if (editingText && patch.align) {
+      setEditingText((prev) => prev ? { ...prev, align: patch.align } : prev);
+    }
+  }, [editingText, selectedAnnotationId, setAnnotations]);
 
   const applyWatermark = useCallback(() => {
     const label = watermarkText.trim();
@@ -443,9 +499,16 @@ export default function PdfEdit() {
         docTitle={doc.title}
         tool={tool} setTool={setTool}
         fontSize={fontSize} setFontSize={setFontSize}
-        textColor={textColor} setTextColor={setTextColor}
-        textFont={textFont} setTextFont={setTextFont}
-        textBold={textBold} setTextBold={setTextBold}
+        textColor={textColor} setTextColor={(c) => { setTextColor(c); patchSelectedText({ color: c }); }}
+        textBackground={textBackground} setTextBackground={(c) => { setTextBackground(c); patchSelectedText({ backgroundColor: c === "none" ? undefined : c }); }}
+        textFont={textFont} setTextFont={(f) => { setTextFont(f); patchSelectedText({ fontFamily: f }); }}
+        textBold={textBold} setTextBold={(b) => { setTextBold(b); patchSelectedText({ bold: b }); }}
+        textItalic={textItalic} setTextItalic={(b) => { setTextItalic(b); patchSelectedText({ italic: b }); }}
+        textUnderline={textUnderline} setTextUnderline={(b) => { setTextUnderline(b); patchSelectedText({ underline: b }); }}
+        textStrike={textStrike} setTextStrike={(b) => { setTextStrike(b); patchSelectedText({ strikethrough: b }); }}
+        textAlign={textAlign} setTextAlign={(a) => { setTextAlign(a); patchSelectedText({ align: a }); setEditingText((prev) => prev ? { ...prev, align: a } : prev); }}
+        lineHeight={lineHeight} setLineHeight={(n) => { setLineHeight(n); patchSelectedText({ lineHeight: n }); }}
+        listStyle={listStyle} setListStyle={(s) => { setListStyle(s); patchSelectedText({ listStyle: s }); }}
         drawColor={drawColor} setDrawColor={setDrawColor}
         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
         selectedStamp={selectedStamp} setSelectedStamp={setSelectedStamp}
@@ -501,7 +564,7 @@ export default function PdfEdit() {
                   data-editor-page={index}
                   className={`relative inline-block shadow-md ${activePageIndex === index ? "ring-2 ring-primary" : ""}`}
                   onClick={(e) => handlePageClick(index, e)}
-                  style={{ cursor: tool === "text" || tool === "stamp" || tool === "checkmark" || tool === "image" ? "crosshair" : undefined }}
+                  style={{ cursor: tool === "text" || tool === "stamp" || tool === "checkmark" || tool === "image" || tool === "signature" || tool === "sticky" ? "crosshair" : undefined }}
                 >
                   <canvas
                     ref={(el) => { if (el) canvasRefs.current.set(pageState.pageNum, el); else canvasRefs.current.delete(pageState.pageNum); }}
@@ -550,6 +613,8 @@ export default function PdfEdit() {
                     onDelete={handleDeleteAnnotation}
                     onUpdate={handleUpdateAnnotation}
                     onEditText={handleEditText}
+                    onEditSignature={(ann) => setSignatureTargetId(ann.id)}
+                    onEditSticky={(ann) => setStickyEditor({ id: ann.id, text: ann.text })}
                   />
 
                   {editingText?.pageIndex === index && (
@@ -560,10 +625,15 @@ export default function PdfEdit() {
                       height={editingText.height || defaultTextBoxHeight(fontSize)}
                       text={textValue}
                       fontSize={fontSize}
-                      align={editingText.align ?? "left"}
+                      align={editingText.align ?? textAlign}
                       color={textColor}
-                      fontFamily={textFont === "times" ? "Times New Roman, Times, serif" : textFont === "courier" ? "Courier New, Courier, monospace" : "Helvetica, Arial, sans-serif"}
+                      backgroundColor={textBackground}
+                      fontFamily={editorFontCss(textFont)}
                       bold={textBold}
+                      italic={textItalic}
+                      underline={textUnderline}
+                      strikethrough={textStrike}
+                      lineHeight={lineHeight}
                       pageWidth={canvasRefs.current.get(pageState.pageNum)?.width || 900}
                       pageHeight={canvasRefs.current.get(pageState.pageNum)?.height || 1200}
                       otherRects={annotations
@@ -576,7 +646,12 @@ export default function PdfEdit() {
                         setEditingText((prev) => prev ? { ...prev, ...next } : prev);
                       }}
                       onCommit={confirmText}
-                      onCancel={() => setEditingText(null)}
+                      onCancel={() => { setEditingText(null); setTextValue(""); }}
+                      onDelete={() => {
+                        if (editingText.id) handleDeleteAnnotation(editingText.id);
+                        setEditingText(null);
+                        setTextValue("");
+                      }}
                     />
                   )}
                 </div>
@@ -608,6 +683,48 @@ export default function PdfEdit() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setWatermarkOpen(false)}>Cancel</Button>
             <Button onClick={applyWatermark}>Add watermark</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!signatureTargetId} onOpenChange={(open) => { if (!open) setSignatureTargetId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Add signature</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Draw or type a signature into the box you placed. Cancel to leave the empty sign-here space.</p>
+          <SignatureCapture
+            saveLabel="Place signature"
+            onSave={(imageData) => {
+              if (signatureTargetId) {
+                handleUpdateAnnotation(signatureTargetId, { imageData } as Partial<SignatureAnnotation>);
+              }
+              setSignatureTargetId(null);
+            }}
+            onCancel={() => setSignatureTargetId(null)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!stickyEditor} onOpenChange={(open) => { if (!open) setStickyEditor(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Next sticky note</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Guide people to the next action</Label>
+            <Textarea
+              value={stickyEditor?.text ?? ""}
+              onChange={(e) => setStickyEditor((prev) => prev ? { ...prev, text: e.target.value } : prev)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStickyEditor(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (stickyEditor) handleUpdateAnnotation(stickyEditor.id, { text: stickyEditor.text } as Partial<StickyNoteAnnotation>);
+              setStickyEditor(null);
+            }}>Update note</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -5,7 +5,9 @@ import { clampRect, snapRect } from "@/lib/textLayout";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 import { checkGlyph } from "@/lib/checkStyles";
 import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
-import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
+import { editorFontCss } from "@/lib/editorFonts";
+import { formatDisplayLines } from "@/lib/pendingText";
+import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation } from "./types";
 
 type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
@@ -26,16 +28,17 @@ function textBox(ann: TextAnnotation) {
 function boxSize(ann: Annotation): { width: number; height: number } | null {
   if (ann.type === "text") return textBox(ann);
   if (ann.type === "stamp" && ann.width && ann.height) return { width: ann.width, height: ann.height };
-  if (ann.type === "highlight" || ann.type === "shape" || ann.type === "image" || ann.type === "whiteout") {
+  if (
+    ann.type === "highlight" || ann.type === "shape" || ann.type === "image" ||
+    ann.type === "whiteout" || ann.type === "signature" || ann.type === "sticky"
+  ) {
     return { width: ann.width, height: ann.height };
   }
   return null;
 }
 
-function editorFontFamily(family: EditorFont | undefined) {
-  if (family === "times") return "Times New Roman, Times, serif";
-  if (family === "courier") return "Courier New, Courier, monospace";
-  return "Helvetica, Arial, sans-serif";
+function isAlwaysInteractive(ann: Annotation) {
+  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky";
 }
 
 interface AnnotationOverlayProps {
@@ -47,10 +50,12 @@ interface AnnotationOverlayProps {
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Annotation>) => void;
   onEditText?: (ann: TextAnnotation) => void;
+  onEditSignature?: (ann: SignatureAnnotation) => void;
+  onEditSticky?: (ann: StickyNoteAnnotation) => void;
 }
 
 export default function AnnotationOverlay({
-  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText,
+  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky,
 }: AnnotationOverlayProps) {
   const pageRef = useRef<HTMLDivElement>(null);
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing");
@@ -65,10 +70,10 @@ export default function AnnotationOverlay({
   const [resizing, setResizing] = useState(false);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, ann: Annotation) => {
-    if (!isSelectMode) return;
+    if (!isSelectMode && !isAlwaysInteractive(ann)) return;
     e.stopPropagation();
     onSelect(ann.id);
-    if ("x" in ann && "y" in ann) {
+    if (isSelectMode && "x" in ann && "y" in ann) {
       const box = boxSize(ann);
       dragRef.current = {
         id: ann.id, startX: e.clientX, startY: e.clientY, origX: ann.x, origY: ann.y,
@@ -123,7 +128,7 @@ export default function AnnotationOverlay({
       setGuides({ v: snapped.guideV, h: snapped.guideH });
       onUpdate(d.id, { x: clamped.x, y: clamped.y } as any);
     }
-  }, [dragging, resizing, onUpdate]);
+  }, [dragging, resizing, onUpdate, pageAnnotations]);
 
   const handleMouseUp = useCallback(() => {
     dragRef.current = null;
@@ -180,17 +185,20 @@ export default function AnnotationOverlay({
       {pageAnnotations.map((ann) => {
         const isSelected = selectedId === ann.id;
         const box = boxSize(ann);
+        const interactive = isSelectMode || isAlwaysInteractive(ann);
         const common = {
           position: "absolute" as const,
           left: "x" in ann ? ann.x : 0,
           top: "y" in ann ? ann.y : 0,
           width: box?.width,
           height: box?.height,
-          pointerEvents: isSelectMode ? "auto" as const : "none" as const,
+          pointerEvents: interactive ? "auto" as const : "none" as const,
           cursor: isSelectMode ? "move" : "default",
           outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
           outlineOffset: 2,
         };
+
+        const showDelete = isSelected || isAlwaysInteractive(ann);
 
         return (
           <div
@@ -199,48 +207,56 @@ export default function AnnotationOverlay({
             onMouseDown={(e) => handleMouseDown(e, ann)}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => {
-              if (ann.type === "text" && onEditText) {
-                e.stopPropagation();
-                onEditText(ann);
-              }
+              e.stopPropagation();
+              if (ann.type === "text" && onEditText) onEditText(ann);
+              if (ann.type === "signature" && onEditSignature) onEditSignature(ann);
+              if (ann.type === "sticky" && onEditSticky) onEditSticky(ann);
             }}
           >
-            {/* Delete toolbar */}
-            {isSelected && (
-              <div className="absolute -top-8 left-0 flex gap-1 z-20">
-                <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}>
+            {showDelete && (
+              <div className="absolute -top-8 left-0 flex gap-1 z-20" style={{ pointerEvents: "auto" }}>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-6 w-6 p-0"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}
+                >
                   <Trash2 className="h-3 w-3" />
                 </Button>
-                <div className="h-6 w-6 flex items-center justify-center bg-muted rounded cursor-grab">
-                  <GripVertical className="h-3 w-3 text-muted-foreground" />
-                </div>
+                {isSelected && (
+                  <div className="h-6 w-6 flex items-center justify-center bg-muted rounded cursor-grab">
+                    <GripVertical className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Resize handles */}
             {isSelected && renderResizeHandles(ann)}
 
-            {/* Render by type */}
             {ann.type === "text" && (
               <div
                 className="select-none overflow-hidden"
                 style={{
                   width: "100%",
                   height: "100%",
-                  fontSize: (ann as TextAnnotation).fontSize,
-                  color: (ann as TextAnnotation).color || "#111827",
-                  fontWeight: (ann as TextAnnotation).bold ? 700 : 400,
-                  fontFamily: editorFontFamily((ann as TextAnnotation).fontFamily),
+                  fontSize: ann.fontSize,
+                  color: ann.color || "#111827",
+                  backgroundColor: ann.backgroundColor,
+                  fontWeight: ann.bold ? 700 : 400,
+                  fontStyle: ann.italic ? "italic" : "normal",
+                  textDecoration: [ann.underline ? "underline" : "", ann.strikethrough ? "line-through" : ""].filter(Boolean).join(" ") || undefined,
+                  fontFamily: editorFontCss(ann.fontFamily),
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
-                  textAlign: (ann as TextAnnotation).align ?? "left",
-                  lineHeight: 1.35,
-                  opacity: (ann as TextAnnotation).opacity ?? 1,
-                  transform: (ann as TextAnnotation).rotate ? `rotate(${(ann as TextAnnotation).rotate}deg)` : undefined,
+                  textAlign: ann.align ?? "left",
+                  lineHeight: ann.lineHeight ?? 1.35,
+                  opacity: ann.opacity ?? 1,
+                  transform: ann.rotate ? `rotate(${ann.rotate}deg)` : undefined,
                   transformOrigin: "left top",
                 }}
               >
-                {(ann as TextAnnotation).text}
+                {formatDisplayLines(ann.text, ann.listStyle).join("\n")}
               </div>
             )}
             {ann.type === "whiteout" && (
@@ -290,6 +306,33 @@ export default function AnnotationOverlay({
                 alt="annotation"
               />
             )}
+            {ann.type === "signature" && (
+              (ann as SignatureAnnotation).imageData ? (
+                <img
+                  src={(ann as SignatureAnnotation).imageData}
+                  alt="Signature"
+                  draggable={false}
+                  className="select-none object-contain"
+                  style={{ width: "100%", height: "100%" }}
+                />
+              ) : (
+                <div className="w-full h-full rounded border-2 border-dashed border-slate-400 bg-slate-50/80 flex flex-col justify-end px-2 pb-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-slate-500">Sign here</span>
+                  <div className="h-px bg-slate-500/70 mt-1" />
+                </div>
+              )
+            )}
+            {ann.type === "sticky" && (
+              <div
+                className="w-full h-full rounded-sm shadow-sm px-2 py-1.5 text-left overflow-hidden"
+                style={{ backgroundColor: (ann as StickyNoteAnnotation).color || "#fde047" }}
+              >
+                <div className="text-[10px] font-bold uppercase tracking-wide text-amber-900">Next</div>
+                <div className="text-[11px] leading-snug text-amber-950 whitespace-pre-wrap">
+                  {(ann as StickyNoteAnnotation).text}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
@@ -308,10 +351,39 @@ function renderShape(ann: ShapeAnnotation) {
       </svg>
     );
   }
-  if (shapeType === "circle") {
+  if (shapeType === "rounded") {
+    return (
+      <svg width={width} height={height} className="select-none">
+        <rect x={sw / 2} y={sw / 2} width={Math.max(0, width - sw)} height={Math.max(0, height - sw)} rx={12} ry={12} stroke={strokeColor} fill={fill} strokeWidth={sw} />
+      </svg>
+    );
+  }
+  if (shapeType === "circle" || shapeType === "ellipse") {
     return (
       <svg width={width} height={height} className="select-none">
         <ellipse cx={width / 2} cy={height / 2} rx={Math.max(0, width / 2 - sw / 2)} ry={Math.max(0, height / 2 - sw / 2)} stroke={strokeColor} fill={fill} strokeWidth={sw} />
+      </svg>
+    );
+  }
+  if (shapeType === "triangle") {
+    return (
+      <svg width={width} height={height} className="select-none">
+        <polygon points={`${width / 2},${sw} ${width - sw},${height - sw} ${sw},${height - sw}`} stroke={strokeColor} fill={fill} strokeWidth={sw} />
+      </svg>
+    );
+  }
+  if (shapeType === "diamond") {
+    return (
+      <svg width={width} height={height} className="select-none">
+        <polygon points={`${width / 2},${sw} ${width - sw},${height / 2} ${width / 2},${height - sw} ${sw},${height / 2}`} stroke={strokeColor} fill={fill} strokeWidth={sw} />
+      </svg>
+    );
+  }
+  if (shapeType === "arrow") {
+    return (
+      <svg width={width} height={height} className="select-none">
+        <line x1={0} y1={height / 2} x2={width * 0.68} y2={height / 2} stroke={strokeColor} strokeWidth={sw} />
+        <polygon points={`${width * 0.68},${height * 0.2} ${width - 2},${height / 2} ${width * 0.68},${height * 0.8}`} fill={strokeColor} />
       </svg>
     );
   }

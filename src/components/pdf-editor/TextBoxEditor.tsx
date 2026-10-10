@@ -8,13 +8,14 @@ import {
   ArrowRight,
   ArrowUp,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { TextAlign } from "@/lib/textLayout";
 import { clampRect, snapRect } from "@/lib/textLayout";
 import type { ResizeDir } from "./resizeHandles";
-import { HANDLE_SIZE, MIN_SIZE, renderResizeHandles } from "./resizeHandles";
+import { MIN_SIZE, renderResizeHandles } from "./resizeHandles";
 
 interface TextBoxEditorProps {
   x: number;
@@ -25,19 +26,26 @@ interface TextBoxEditorProps {
   fontSize: number;
   align: TextAlign;
   color?: string;
+  backgroundColor?: string;
   fontFamily?: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  lineHeight?: number;
   pageWidth: number;
   pageHeight: number;
   otherRects: { x: number; y: number; w: number; h: number }[];
   onChange: (next: { x: number; y: number; width: number; height: number; text: string; align: TextAlign }) => void;
   onCommit: () => void;
   onCancel: () => void;
+  onDelete?: () => void;
 }
 
 export default function TextBoxEditor({
-  x, y, width, height, text, fontSize, align, color, fontFamily, bold, pageWidth, pageHeight, otherRects,
-  onChange, onCommit, onCancel,
+  x, y, width, height, text, fontSize, align, color, backgroundColor, fontFamily, bold, italic,
+  underline, strikethrough, lineHeight, pageWidth, pageHeight, otherRects,
+  onChange, onCommit, onCancel, onDelete,
 }: TextBoxEditorProps) {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
@@ -94,6 +102,8 @@ export default function TextBoxEditor({
   const nudge = (dx: number, dy: number) => {
     updateBox(x + dx, y + dy, width, height, false);
   };
+
+  const decorations = [underline ? "underline" : "", strikethrough ? "line-through" : ""].filter(Boolean).join(" ");
 
   return (
     <>
@@ -153,6 +163,22 @@ export default function TextBoxEditor({
               <Icon className="h-3 w-3" />
             </Button>
           ))}
+          {onDelete && (
+            <>
+              <div className="w-px h-4 bg-border mx-0.5" />
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="h-6 w-6 p-0"
+                title="Delete text"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={onDelete}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </>
+          )}
         </div>
 
         <Textarea
@@ -171,14 +197,17 @@ export default function TextBoxEditor({
               onCommit();
             }
           }}
-          className="w-full h-full min-h-0 resize-none p-1 bg-background/90 border-primary"
+          className="w-full h-full min-h-0 resize-none p-1 border-primary"
           style={{
             fontSize,
-            lineHeight: 1.25,
+            lineHeight: lineHeight ?? 1.25,
             textAlign: align,
             color,
+            backgroundColor: backgroundColor && backgroundColor !== "none" ? backgroundColor : "hsl(var(--background) / 0.9)",
             fontFamily,
             fontWeight: bold ? 700 : 400,
+            fontStyle: italic ? "italic" : "normal",
+            textDecoration: decorations || undefined,
           }}
         />
 
