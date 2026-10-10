@@ -21,62 +21,68 @@ export function sealByStampLabel(label: string | null | undefined) {
   return COMPANY_SEALS.find((s) => s.stampLabel === label) || null;
 }
 
+/** Concentric layout: logo disk, gap, name band, gold ring, outer rim. */
+const CX = 160;
+const CY = 160;
+const LOGO_R = 62;
+const LOGO_RING_R = 70;
+const NAME_R = 104;
+const HAIRLINE_R = 132;
+const GOLD_R = 144;
+const OUTER_R = 156;
+
 function logoImage(logo: string | null | undefined) {
   if (!logo) return "";
   const href = logo.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  return `<defs><clipPath id="seal-logo-clip"><circle cx="160" cy="160" r="80"/></clipPath></defs>
-  <circle cx="160" cy="160" r="80" fill="#06147a"/>
-  <image href="${href}" x="68" y="68" width="184" height="184" preserveAspectRatio="xMidYMid slice" clip-path="url(#seal-logo-clip)"/>`;
+  const box = LOGO_R * 2;
+  return `<defs><clipPath id="seal-logo-clip"><circle cx="${CX}" cy="${CY}" r="${LOGO_R}"/></clipPath></defs>
+  <circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="#06147a"/>
+  <image href="${href}" x="${CX - LOGO_R}" y="${CY - LOGO_R}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid slice" clip-path="url(#seal-logo-clip)"/>`;
 }
 
-function ringText(text: string, pathId: string, fill: string, size: number, tracking = 0.8) {
-  return `<text fill="${fill}" font-family="Georgia, 'Times New Roman', serif" font-size="${size}" font-weight="700" letter-spacing="${tracking}"><textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${text}</textPath></text>`;
+function ringText(text: string, pathId: string, fill: string, size: number, tracking: number) {
+  return `<text fill="${fill}" font-family="Georgia, 'Times New Roman', Times, serif" font-size="${size}" font-weight="700" letter-spacing="${tracking}"><textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${text}</textPath></text>`;
+}
+
+function frame(ink: string, gold: string, paper: string) {
+  return `<circle cx="${CX}" cy="${CY}" r="${OUTER_R}" fill="${paper}" stroke="${ink}" stroke-width="3.5"/>
+  <circle cx="${CX}" cy="${CY}" r="${GOLD_R}" fill="none" stroke="${gold}" stroke-width="7"/>
+  <circle cx="${CX}" cy="${CY}" r="${HAIRLINE_R}" fill="none" stroke="${ink}" stroke-width="1.5"/>
+  <circle cx="${CX}" cy="${CY}" r="${LOGO_RING_R}" fill="none" stroke="${gold}" stroke-width="2.5"/>`;
+}
+
+function namePaths() {
+  const r = NAME_R;
+  return `<path id="seal-name-top" fill="none" d="M ${CX - r},${CY} a ${r},${r} 0 0,1 ${r * 2},0"/>
+  <path id="seal-name-bot" fill="none" d="M ${CX + r},${CY} a ${r},${r} 0 0,1 ${-r * 2},0"/>`;
 }
 
 export function companySealSvg(id: CompanySealId, logo: string | null = getActiveSealLogo()): string {
   const mark = logoImage(logo);
-  if (id === "efinmoney") {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 320 320" width="320" height="320">
-  <defs>
-    <path id="em-top" d="M46,160 a114,114 0 0,1 228,0"/>
-    <path id="em-bot" d="M78,168 a82,82 0 0,0 164,0"/>
-  </defs>
-  <circle cx="160" cy="160" r="154" fill="#f8faf6" stroke="#0f3d2e" stroke-width="4"/>
-  <circle cx="160" cy="160" r="142" fill="none" stroke="#c6a15b" stroke-width="8"/>
-  <circle cx="160" cy="160" r="128" fill="none" stroke="#0f3d2e" stroke-width="2"/>
-  ${mark ? mark : `<circle cx="160" cy="160" r="78" fill="#0f3d2e"/>
-  <circle cx="160" cy="160" r="70" fill="none" stroke="#c6a15b" stroke-width="2"/>
-  <text x="160" y="156" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="34" font-weight="700">eF</text>
-  <text x="160" y="178" text-anchor="middle" fill="#c6a15b" font-family="Georgia, serif" font-size="11" letter-spacing="2">MONEY</text>`}
-  ${mark ? `<circle cx="160" cy="160" r="80" fill="none" stroke="#c6a15b" stroke-width="3"/>` : ""}
-  ${ringText("EFINMONEY", "em-top", "#0f3d2e", 26, 1.2)}
-  ${ringText("CORPORATE SEAL", "em-bot", "#0f3d2e", 16, 1)}
-  <circle cx="160" cy="52" r="3" fill="#c6a15b"/>
-  <circle cx="160" cy="268" r="3" fill="#c6a15b"/>
-  <text x="160" y="208" text-anchor="middle" fill="#0f3d2e" font-family="Georgia, serif" font-size="8" letter-spacing="1.2">ELECTRONIC SEAL</text>
-</svg>`;
-  }
+  const shortName = id === "efinmoney";
+  const ink = shortName ? "#0f3d2e" : "#1c2c4a";
+  const gold = shortName ? "#c6a15b" : "#b08d3e";
+  const paper = shortName ? "#f8faf6" : "#f7f5f0";
+  const company = shortName ? "EFINMONEY" : "EFINTAX ADVISORS LTD";
+  const nameSize = shortName ? 20 : 14.5;
+  const nameTrack = shortName ? 2.4 : 0.45;
+
+  const center = mark || (shortName
+    ? `<circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="${ink}"/>
+  <text x="${CX}" y="154" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="30" font-weight="700">eF</text>
+  <text x="${CX}" y="174" text-anchor="middle" fill="${gold}" font-family="Georgia, serif" font-size="10" letter-spacing="2.2">MONEY</text>`
+    : `<circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="${ink}"/>
+  <text x="${CX}" y="166" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="24" font-weight="700">ETA</text>`);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 320 320" width="320" height="320">
   <defs>
-    <path id="et-top" d="M40,162 a120,120 0 0,1 240,0"/>
-    <path id="et-bot" d="M72,170 a88,88 0 0,0 176,0"/>
+    ${namePaths()}
   </defs>
-  <circle cx="160" cy="160" r="154" fill="#f7f5f0" stroke="#1c2c4a" stroke-width="4"/>
-  <circle cx="160" cy="160" r="142" fill="none" stroke="#b08d3e" stroke-width="8"/>
-  <circle cx="160" cy="160" r="128" fill="none" stroke="#1c2c4a" stroke-width="2"/>
-  ${mark ? mark : `<circle cx="160" cy="160" r="74" fill="#1c2c4a"/>
-  <circle cx="160" cy="160" r="66" fill="none" stroke="#b08d3e" stroke-width="2"/>
-  <path d="M160 112 l22 14 v28 c0 22-14 34-22 40 c-8-6-22-18-22-40 v-28 z" fill="none" stroke="#f3e6c4" stroke-width="2"/>
-  <text x="160" y="164" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="26" font-weight="700">ETA</text>`}
-  ${mark ? `<circle cx="160" cy="160" r="80" fill="none" stroke="#b08d3e" stroke-width="3"/>` : ""}
-  ${ringText("EFINTAX ADVISORS LTD", "et-top", "#1c2c4a", 20, 0.35)}
-  ${ringText("CORPORATE SEAL", "et-bot", "#1c2c4a", 16, 0.8)}
-  <circle cx="46" cy="160" r="3" fill="#b08d3e"/>
-  <circle cx="274" cy="160" r="3" fill="#b08d3e"/>
-  <text x="160" y="214" text-anchor="middle" fill="#1c2c4a" font-family="Georgia, serif" font-size="8" letter-spacing="1">ELECTRONIC SEAL</text>
+  ${frame(ink, gold, paper)}
+  ${center}
+  ${ringText(company, "seal-name-top", ink, nameSize, nameTrack)}
+  ${ringText("CORPORATE SEAL", "seal-name-bot", ink, 13, 1.6)}
 </svg>`;
 }
 
