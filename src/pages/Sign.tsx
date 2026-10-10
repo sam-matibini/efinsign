@@ -5,7 +5,7 @@ import { createSignerClient } from "@/integrations/supabase/signerClient";
 import PdfViewer from "@/components/PdfViewer";
 import SignatureCapture from "@/components/SignatureCapture";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
@@ -31,6 +31,7 @@ import { fontSizeForFieldHeight } from "@/lib/fieldFont";
 import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
 import { companySealDataUrl } from "@/lib/companySeals";
 import { isSealField, sealFromField } from "@/lib/documentFields";
+import { countPdfPages, defaultSignHerePlacement, isLocalSignHere, LOCAL_SIGN_HERE_ID, needsSignHereField } from "@/lib/signHere";
 
 type FieldWithValue = Tables<"document_fields"> & { localValue?: string };
 
@@ -267,6 +268,44 @@ export default function Sign() {
     setTextInputValue("");
   }, [activeField, textInputValue, updateFieldValue, advanceToNextUnfilled]);
 
+  const ensureSignHere = useCallback(async () => {
+    if (!signer || !needsSignHereField(fields)) {
+      const first = fields.find((f) => f.field_type === "signature" && !fieldIsFilled(f)) || fields.find((f) => !fieldIsFilled(f));
+      if (first) {
+        setHighlightedFieldId(first.id);
+        setTimeout(() => scrollToField(first.id), 350);
+      }
+      return;
+    }
+    let page = 1;
+    if (pdfUrl) {
+      try { page = await countPdfPages(pdfUrl); } catch { /* keep page 1 */ }
+    }
+    const box = defaultSignHerePlacement(page);
+    const local: FieldWithValue = {
+      id: LOCAL_SIGN_HERE_ID,
+      document_id: signer.document_id,
+      signer_id: signer.id,
+      field_type: "signature",
+      value: null,
+      created_at: new Date().toISOString(),
+      ...box,
+    };
+    setFields((prev) => (needsSignHereField(prev) ? [...prev, local] : prev));
+    setHighlightedFieldId(local.id);
+    setTimeout(() => scrollToField(local.id), 400);
+    const { data } = await sb.from("document_fields").insert({
+      document_id: signer.document_id,
+      signer_id: signer.id,
+      field_type: "signature",
+      ...box,
+    }).select().single();
+    if (data) {
+      setFields((prev) => prev.map((f) => (f.id === LOCAL_SIGN_HERE_ID ? { ...data, localValue: f.localValue } : f)));
+      setHighlightedFieldId(data.id);
+    }
+  }, [fields, pdfUrl, sb, scrollToField, signer]);
+
   const handleNextClick = useCallback(() => {
     if (nextUnfilledField) {
       setHighlightedFieldId(nextUnfilledField.id);
@@ -318,7 +357,21 @@ export default function Sign() {
 
     try {
       for (const field of fields) {
-        if (field.localValue) {
+        if (!field.localValue) continue;
+        if (isLocalSignHere(field.id)) {
+          const { error: fieldErr } = await sb.from("document_fields").insert({
+            document_id: documentId,
+            signer_id: signer.id,
+            field_type: field.field_type,
+            page_number: field.page_number,
+            x: field.x,
+            y: field.y,
+            width: field.width,
+            height: field.height,
+            value: field.localValue,
+          });
+          if (fieldErr) throw new Error(`Saving field failed: ${fieldErr.message}`);
+        } else {
           const { error: fieldErr } = await supabase
             .from("document_fields")
             .update({ value: field.localValue })
@@ -472,6 +525,18 @@ export default function Sign() {
                     <span className="text-foreground whitespace-pre-wrap break-words leading-tight" style={{ fontSize: fontSizeForFieldHeight(field.height) }}>{field.localValue}</span>
                   </div>
                 )
+              ) : isSignatureType ? (
+                <div className="relative w-full h-full">
+                  <div className="absolute -left-1 -top-6 z-20 bg-amber-400 text-amber-950 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-t shadow-sm">
+                    {field.field_type === "initials" ? "Initial here" : "Sign here"}
+                  </div>
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 bg-amber-50/80 border-2 border-dashed border-amber-500">
+                    <span className="text-[11px] font-semibold text-amber-950">
+                      {field.field_type === "initials" ? "Initial here" : "Sign here"}
+                    </span>
+                    <span className="text-[10px] text-amber-900/80">{signer?.name || "Click to sign"}</span>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center gap-1 opacity-70">
                   {getFieldIcon(asSeal ? "seal" : field.field_type)}
@@ -746,6 +811,7 @@ export default function Sign() {
                     } catch {}
                   }
                   setReviewed(true);
+                  await ensureSignHere();
                 }}
               >
                 Start signing
@@ -768,7 +834,7 @@ export default function Sign() {
             <img src={efinsignLogo} alt="eFinSign" className="h-8 w-8 rounded-lg object-contain" />
             <div className="min-w-0">
               <h1 className="font-display font-bold text-lg truncate">{doc?.title}</h1>
-              <p className="text-sm text-muted-foreground truncate">Hello {signer.name}, fill the highlighted fields, then submit.</p>
+              <p className="text-sm text-muted-foreground truncate">Hello {signer.name}, click Sign here on the document, then submit.</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setReviewed(false)}>
@@ -786,7 +852,7 @@ export default function Sign() {
         )}
       </header>
 
-      <div className={`flex-1 min-h-0 ${totalCount > 0 ? "pb-16" : ""}`}>
+      <div className="flex-1 min-h-0 pb-16">
         {pdfUrl && (
           <PdfViewer
             url={pdfUrl}
@@ -806,61 +872,8 @@ export default function Sign() {
         )}
       </div>
 
-      {totalCount === 0 && (
-        <div className="shrink-0 border-t border-border/60 bg-card p-4 space-y-3">
-          <Card className="bg-card/40 border-border/50">
-            <CardContent className="py-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="ts-toggle-top" className="text-sm font-medium cursor-pointer">
-                    Include signing timestamp
-                  </Label>
-                  <p className="text-xs text-muted-foreground">Adds the date and time below your signature in the final PDF.</p>
-                </div>
-              </div>
-              <Switch id="ts-toggle-top" checked={includeTimestamp} onCheckedChange={setIncludeTimestamp} />
-            </CardContent>
-          </Card>
-          <Card className="bg-card/60 border-border/50">
-            <CardHeader>
-              <CardTitle className="font-display">Your Signature</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SignatureCapture
-                saveLabel="Sign Document"
-                onSave={async (sigData) => {
-                  if (!signer) return;
-                  const documentId = signer.document_id;
-                  try {
-                    await sb.from("signatures").insert({ signer_id: signer.id, image_data: sigData });
-                    await sb.from("document_signers").update({ status: "signed", signed_at: new Date().toISOString() }).eq("id", signer.id);
-                    await sb.from("audit_logs").insert({ document_id: documentId, event_type: "signed", actor_email: signer.email });
-                    const { data: docAfter } = await sb.from("documents").select("status, file_path").eq("id", documentId).maybeSingle();
-                    if (docAfter?.status === "completed" && docAfter.file_path) {
-                      try {
-                        await generateAndUploadSignedPdf(documentId, docAfter.file_path, {
-                          includeTimestamp,
-                          client: sb,
-                          accessToken: token ?? undefined,
-                        });
-                      } catch {}
-                    }
-                    notifyOwner(documentId, signer.name, signer.email, []);
-                    setSigned(true);
-                  } catch (err: any) { toast.error(err.message); }
-                }}
-              />
-            </CardContent>
-          </Card>
-          <Button variant="outline" onClick={handleDecline}>
-            Decline
-          </Button>
-        </div>
-      )}
-
       {/* Sticky bottom navigation bar */}
-      {totalCount > 0 && (
+      {(
         <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg z-50">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -871,7 +884,7 @@ export default function Sign() {
                 </p>
               ) : nextUnfilledField ? (
                 <p className="text-sm text-muted-foreground truncate">
-                  Next: <span className="font-medium text-foreground capitalize">{nextUnfilledField.field_type}</span> on page {nextUnfilledField.page_number}
+                  Next: <span className="font-medium text-foreground">{nextUnfilledField.field_type === "signature" ? "Sign here" : getFieldLabel(nextUnfilledField.field_type)}</span> on page {nextUnfilledField.page_number}
                 </p>
               ) : null}
             </div>
@@ -969,6 +982,8 @@ function getFieldIcon(type: string) {
 
 function getFieldLabel(type?: string): string {
   switch (type) {
+    case "signature": return "Sign here";
+    case "initials": return "Initial here";
     case "full_name": return "Full Name";
     case "title": return "Title";
     default: return type || "text";
