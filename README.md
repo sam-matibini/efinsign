@@ -18,7 +18,7 @@ The Vite app starts on port 8080 by default. Open Edit PDF on a document to use 
 
 Save PDF still burns in-progress text and uses the existing storage fallback.
 
-After signing, **Close** leaves the completion screen (it cannot force-close a tab the browser opened, so it returns to the landing page). Company seals are chosen in **Settings** and appended on prepare/fill-and-sign. Fill & Sign text boxes can be moved, resized, deleted, and formatted like Word. Deploy `supabase/migrations/20261010120000_profile_upsert_and_org_seal.sql` so Complete your profile and org seals persist in the hosted database.
+After signing, **Close** leaves the completion screen (it cannot force-close a tab the browser opened, so it returns to the landing page). Company seals are chosen in **Settings**, can include a logo icon in the center, and are appended on prepare/fill-and-sign. Signatures and seals drag, snap, resize, and nudge left/right/up/down. Deploy the latest `supabase/migrations` so profile save and org seals persist in the hosted database.
 
 ## Project info
 

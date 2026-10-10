@@ -31,4 +31,10 @@ describe("company seals", () => {
     expect(companySealSvg("efinmoney")).toContain("CORPORATE SEAL");
     expect(companySealSvg("efintax")).toContain("CORPORATE SEAL");
   });
+
+  it("places a company logo icon in the center of the seal", () => {
+    const svg = companySealSvg("efinmoney", "data:image/png;base64,aaa");
+    expect(svg).toContain("<image href=\"data:image/png;base64,aaa\"");
+    expect(svg).not.toContain(">eF<");
+  });
 });

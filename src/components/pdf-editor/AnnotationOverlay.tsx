@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Trash2, GripVertical } from "lucide-react";
+import { Trash2, GripVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clampRect, snapRect } from "@/lib/textLayout";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
@@ -38,7 +38,7 @@ function boxSize(ann: Annotation): { width: number; height: number } | null {
 }
 
 function isAlwaysInteractive(ann: Annotation) {
-  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky";
+  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp";
 }
 
 interface AnnotationOverlayProps {
@@ -73,7 +73,7 @@ export default function AnnotationOverlay({
     if (!isSelectMode && !isAlwaysInteractive(ann)) return;
     e.stopPropagation();
     onSelect(ann.id);
-    if (isSelectMode && "x" in ann && "y" in ann) {
+    if ("x" in ann && "y" in ann) {
       const box = boxSize(ann);
       dragRef.current = {
         id: ann.id, startX: e.clientX, startY: e.clientY, origX: ann.x, origY: ann.y,
@@ -85,7 +85,7 @@ export default function AnnotationOverlay({
 
   const handleResizeDown = useCallback((e: React.MouseEvent, ann: Annotation, dir: ResizeDir) => {
     const box = boxSize(ann);
-    if (!isSelectMode || !box || !("x" in ann)) return;
+    if (!box || !("x" in ann)) return;
     e.stopPropagation();
     e.preventDefault();
     resizeRef.current = {
@@ -193,7 +193,7 @@ export default function AnnotationOverlay({
           width: box?.width,
           height: box?.height,
           pointerEvents: interactive ? "auto" as const : "none" as const,
-          cursor: isSelectMode ? "move" : "default",
+          cursor: interactive ? "move" : "default",
           outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
           outlineOffset: 2,
         };
@@ -214,7 +214,7 @@ export default function AnnotationOverlay({
             }}
           >
             {showDelete && (
-              <div className="absolute -top-8 left-0 flex gap-1 z-20" style={{ pointerEvents: "auto" }}>
+              <div className="absolute -top-8 left-0 flex gap-0.5 z-20 bg-card border border-border rounded-md px-0.5 py-0.5 shadow-sm" style={{ pointerEvents: "auto" }}>
                 <Button
                   size="sm"
                   variant="destructive"
@@ -224,15 +224,29 @@ export default function AnnotationOverlay({
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
-                {isSelected && (
-                  <div className="h-6 w-6 flex items-center justify-center bg-muted rounded cursor-grab">
-                    <GripVertical className="h-3 w-3 text-muted-foreground" />
-                  </div>
+                <div className="h-6 w-6 flex items-center justify-center bg-muted rounded cursor-grab" title="Drag to move">
+                  <GripVertical className="h-3 w-3 text-muted-foreground" />
+                </div>
+                {"x" in ann && "y" in ann && (
+                  <>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Move up" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { y: Math.max(0, ann.y - 1) } as any); }}>
+                      <ArrowUp className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Move down" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { y: ann.y + 1 } as any); }}>
+                      <ArrowDown className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Move left" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { x: Math.max(0, ann.x - 1) } as any); }}>
+                      <ArrowLeft className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Move right" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { x: ann.x + 1 } as any); }}>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </>
                 )}
               </div>
             )}
 
-            {isSelected && renderResizeHandles(ann)}
+            {(isSelected || ann.type === "signature") && renderResizeHandles(ann)}
 
             {ann.type === "text" && (
               <div

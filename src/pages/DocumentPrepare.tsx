@@ -721,6 +721,7 @@ export default function DocumentPrepare() {
             }}
             onMove={moveField}
             onResize={resizeField}
+            otherRects={pageFields.filter((item) => item.id !== f.id).map((item) => ({ x: item.x, y: item.y, w: item.width, h: item.height }))}
             onDelete={removeField}
             onAdjustFont={(fieldId, direction) => {
               const field = [...fields, ...selfFields].find((item) => item.id === fieldId);

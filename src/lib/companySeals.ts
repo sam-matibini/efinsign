@@ -1,3 +1,5 @@
+import { getActiveSealLogo } from "@/lib/orgSeal";
+
 export const COMPANY_SEALS = [
   {
     id: "efinmoney",
@@ -19,14 +21,22 @@ export function sealByStampLabel(label: string | null | undefined) {
   return COMPANY_SEALS.find((s) => s.stampLabel === label) || null;
 }
 
+function logoImage(logo: string | null | undefined) {
+  if (!logo) return "";
+  const href = logo.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return `<defs><clipPath id="seal-logo-clip"><circle cx="160" cy="160" r="70"/></clipPath></defs>
+  <image href="${href}" x="90" y="90" width="140" height="140" preserveAspectRatio="xMidYMid slice" clip-path="url(#seal-logo-clip)"/>`;
+}
+
 function ringText(text: string, pathId: string, fill: string, size: number) {
   return `<text fill="${fill}" font-family="Georgia, 'Times New Roman', serif" font-size="${size}" font-weight="700" letter-spacing="1.5"><textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${text}</textPath></text>`;
 }
 
-export function companySealSvg(id: CompanySealId): string {
+export function companySealSvg(id: CompanySealId, logo: string | null = getActiveSealLogo()): string {
+  const mark = logoImage(logo);
   if (id === "efinmoney") {
     return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 320 320" width="320" height="320">
   <defs>
     <path id="em-top" d="M46,160 a114,114 0 0,1 228,0"/>
     <path id="em-bot" d="M78,168 a82,82 0 0,0 164,0"/>
@@ -36,8 +46,8 @@ export function companySealSvg(id: CompanySealId): string {
   <circle cx="160" cy="160" r="128" fill="none" stroke="#0f3d2e" stroke-width="2"/>
   <circle cx="160" cy="160" r="78" fill="#0f3d2e"/>
   <circle cx="160" cy="160" r="70" fill="none" stroke="#c6a15b" stroke-width="2"/>
-  <text x="160" y="156" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="34" font-weight="700">eF</text>
-  <text x="160" y="178" text-anchor="middle" fill="#c6a15b" font-family="Georgia, serif" font-size="11" letter-spacing="2">MONEY</text>
+  ${mark || `<text x="160" y="156" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="34" font-weight="700">eF</text>
+  <text x="160" y="178" text-anchor="middle" fill="#c6a15b" font-family="Georgia, serif" font-size="11" letter-spacing="2">MONEY</text>`}
   ${ringText("EFINMONEY", "em-top", "#0f3d2e", 18)}
   ${ringText("CORPORATE SEAL", "em-bot", "#0f3d2e", 13)}
   <circle cx="160" cy="52" r="3" fill="#c6a15b"/>
@@ -47,7 +57,7 @@ export function companySealSvg(id: CompanySealId): string {
   }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 320 320" width="320" height="320">
   <defs>
     <path id="et-top" d="M40,162 a120,120 0 0,1 240,0"/>
     <path id="et-bot" d="M72,170 a88,88 0 0,0 176,0"/>
@@ -57,8 +67,8 @@ export function companySealSvg(id: CompanySealId): string {
   <circle cx="160" cy="160" r="128" fill="none" stroke="#1c2c4a" stroke-width="2"/>
   <circle cx="160" cy="160" r="74" fill="#1c2c4a"/>
   <circle cx="160" cy="160" r="66" fill="none" stroke="#b08d3e" stroke-width="2"/>
-  <path d="M160 112 l22 14 v28 c0 22-14 34-22 40 c-8-6-22-18-22-40 v-28 z" fill="none" stroke="#f3e6c4" stroke-width="2"/>
-  <text x="160" y="164" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="26" font-weight="700">ETA</text>
+  ${mark || `<path d="M160 112 l22 14 v28 c0 22-14 34-22 40 c-8-6-22-18-22-40 v-28 z" fill="none" stroke="#f3e6c4" stroke-width="2"/>
+  <text x="160" y="164" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="26" font-weight="700">ETA</text>`}
   ${ringText("EFINTAX ADVISORS LTD", "et-top", "#1c2c4a", 15)}
   ${ringText("CORPORATE SEAL", "et-bot", "#1c2c4a", 13)}
   <circle cx="46" cy="160" r="3" fill="#b08d3e"/>
@@ -67,8 +77,8 @@ export function companySealSvg(id: CompanySealId): string {
 </svg>`;
 }
 
-export function companySealDataUrl(id: CompanySealId): string {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(companySealSvg(id))}`;
+export function companySealDataUrl(id: CompanySealId, logo: string | null = getActiveSealLogo()): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(companySealSvg(id, logo))}`;
 }
 
 export function svgToPngBytes(svg: string, size = 512): Promise<Uint8Array> {

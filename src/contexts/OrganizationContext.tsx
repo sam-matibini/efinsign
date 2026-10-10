@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { syncSealCache } from "@/lib/orgSeal";
 
 export interface Organization {
   id: string;
@@ -16,6 +17,7 @@ export interface Organization {
   postal_code: string | null;
   country: string | null;
   seal_stamp?: string | null;
+  seal_logo?: string | null;
 }
 
 interface OrgMembership {
@@ -123,6 +125,14 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
   const currentOrg = orgs.find((o) => o.id === currentOrgId) || null;
   const role = currentOrgId ? roles[currentOrgId] || null : null;
+
+  useEffect(() => {
+    if (!currentOrg) {
+      syncSealCache(null);
+      return;
+    }
+    syncSealCache(currentOrg.id, currentOrg.seal_stamp, currentOrg.seal_logo);
+  }, [currentOrg]);
 
   return (
     <OrganizationContext.Provider value={{ currentOrg, orgs, role, loading, switchOrg, createOrg }}>

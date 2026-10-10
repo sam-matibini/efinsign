@@ -486,6 +486,7 @@ export type Database = {
           logo_url: string | null
           name: string
           postal_code: string | null
+          seal_logo: string | null
           seal_stamp: string | null
           telephone: string | null
         }
@@ -501,6 +502,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           postal_code?: string | null
+          seal_logo?: string | null
           seal_stamp?: string | null
           telephone?: string | null
         }
@@ -516,6 +518,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           postal_code?: string | null
+          seal_logo?: string | null
           seal_stamp?: string | null
           telephone?: string | null
         }

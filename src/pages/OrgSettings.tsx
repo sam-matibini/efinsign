@@ -21,8 +21,9 @@ import { toast } from "sonner";
 import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy } from "lucide-react";
 import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
 import { upsertOwnProfile } from "@/lib/upsertOwnProfile";
-import { readOrgSeal, writeOrgSeal } from "@/lib/orgSeal";
-import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
+import { fileToSealLogo, normalizeLogoDataUrl, readOrgSeal, readOrgSealLogo, writeOrgSeal, writeOrgSealLogo } from "@/lib/orgSeal";
+import { COMPANY_SEALS, companySealDataUrl, type CompanySealId } from "@/lib/companySeals";
+import efinAppIcon from "@/assets/efin-app-icon.png";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -108,6 +109,7 @@ export default function OrgSettings() {
   const [orgTelephone, setOrgTelephone] = useState("");
   const [orgCellNumber, setOrgCellNumber] = useState("");
   const [orgSeal, setOrgSeal] = useState<string>("none");
+  const [orgSealLogo, setOrgSealLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -153,6 +155,7 @@ export default function OrgSettings() {
     setOrgTelephone(currentOrg.telephone || "");
     setOrgCellNumber(currentOrg.cell_number || "");
     setOrgSeal(readOrgSeal(currentOrg.id, currentOrg.seal_stamp) || "none");
+    setOrgSealLogo(readOrgSealLogo(currentOrg.id, currentOrg.seal_logo));
     fetchMembers();
     fetchInvitations();
     fetchSignatures();
@@ -291,11 +294,13 @@ export default function OrgSettings() {
         telephone: orgTelephone || null,
         cell_number: orgCellNumber || null,
         seal_stamp: orgSeal === "none" ? null : orgSeal,
+        seal_logo: orgSealLogo,
       } as any)
       .eq("id", currentOrg.id);
     writeOrgSeal(currentOrg.id, orgSeal === "none" ? null : orgSeal);
+    writeOrgSealLogo(currentOrg.id, orgSealLogo);
     if (error) {
-      if (String(error.message || "").toLowerCase().includes("seal_stamp")) {
+      if (/seal_stamp|seal_logo/i.test(String(error.message || ""))) {
         toast.success("Company seal saved on this device. Deploy the latest database migration to sync it for the whole team.");
       } else {
         toast.error("Failed to update");
@@ -649,9 +654,62 @@ export default function OrgSettings() {
                   onClick={() => setOrgSeal(seal.stampLabel)}
                   className={`rounded-full border bg-card p-1 ${orgSeal === seal.stampLabel ? "ring-2 ring-primary" : "border-border"}`}
                 >
-                  <img src={companySealDataUrl(seal.id)} alt={seal.legalName} className="h-14 w-14" />
+                  <img src={companySealDataUrl(seal.id, orgSealLogo)} alt={seal.legalName} className="h-14 w-14" />
                 </button>
               ))}
+            </div>
+            <div className="space-y-2 pt-2">
+              <Label>Seal logo icon</Label>
+              <p className="text-xs text-muted-foreground">Place your company icon in the center of the seal, like the eFin gold “e” mark.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Label htmlFor="seal-logo-upload" className="text-xs cursor-pointer bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md hover:bg-secondary/80">
+                  Upload logo
+                </Label>
+                <input
+                  id="seal-logo-upload"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  disabled={!isAdmin}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    try {
+                      setOrgSealLogo(await fileToSealLogo(file));
+                    } catch (err: any) {
+                      toast.error(err.message || "Could not read that logo");
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!isAdmin}
+                  onClick={async () => {
+                    try {
+                      setOrgSealLogo(await normalizeLogoDataUrl(efinAppIcon));
+                    } catch {
+                      toast.error("Could not load the eFin icon");
+                    }
+                  }}
+                >
+                  Use eFin icon
+                </Button>
+                {orgSealLogo && (
+                  <Button type="button" size="sm" variant="ghost" disabled={!isAdmin} onClick={() => setOrgSealLogo(null)}>
+                    Remove logo
+                  </Button>
+                )}
+              </div>
+              {orgSeal !== "none" && (
+                <img
+                  src={companySealDataUrl(orgSeal.replace("seal:", "") as CompanySealId, orgSealLogo)}
+                  alt="Seal preview"
+                  className="h-24 w-24"
+                />
+              )}
             </div>
           </div>
           {isAdmin && (

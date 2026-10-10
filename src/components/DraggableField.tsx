@@ -5,6 +5,7 @@ import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
 import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
 import { editorFontCss } from "@/lib/editorFonts";
 import { decodeFieldValue, type FieldStyle } from "@/lib/fieldStyle";
+import { clampRect, snapRect } from "@/lib/textLayout";
 
 interface DraggableFieldProps {
   id: string;
@@ -23,6 +24,9 @@ interface DraggableFieldProps {
   onAdjustFont?: (id: string, direction: 1 | -1) => void;
   onEdit?: (id: string) => void;
   onSelect?: (id: string) => void;
+  otherRects?: { x: number; y: number; w: number; h: number }[];
+  pageWidth?: number;
+  pageHeight?: number;
 }
 
 const MIN_W = 40;
@@ -38,10 +42,11 @@ const CURSORS: Record<HandleDir, string> = {
 
 export default function DraggableField({
   id, x, y, width, height, color, label, value, fieldType, selected,
-  onMove, onResize, onDelete, onAdjustFont, onEdit, onSelect,
+  onMove, onResize, onDelete, onAdjustFont, onEdit, onSelect, otherRects = [], pageWidth = 0, pageHeight = 0,
 }: DraggableFieldProps) {
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const offsetRef = useRef({ x: 0, y: 0 });
   const decoded = decodeFieldValue(value);
   const style: FieldStyle = decoded.style;
@@ -59,20 +64,26 @@ export default function DraggableField({
       const parent = el.parentElement;
       if (!parent) return;
       const parentRect = parent.getBoundingClientRect();
-      const newX = Math.max(0, Math.min(ev.clientX - parentRect.left - offsetRef.current.x, parentRect.width - width));
-      const newY = Math.max(0, Math.min(ev.clientY - parentRect.top - offsetRef.current.y, parentRect.height - height));
-      onMove(id, Math.round(newX), Math.round(newY));
+      const rawX = ev.clientX - parentRect.left - offsetRef.current.x;
+      const rawY = ev.clientY - parentRect.top - offsetRef.current.y;
+      const pw = pageWidth || parentRect.width;
+      const ph = pageHeight || parentRect.height;
+      const snapped = snapRect({ x: rawX, y: rawY, w: width, h: height }, otherRects, pw, ph);
+      const clamped = clampRect({ x: snapped.x, y: snapped.y, w: width, h: height }, pw, ph);
+      setGuides({ v: snapped.guideV, h: snapped.guideH });
+      onMove(id, Math.round(clamped.x), Math.round(clamped.y));
     };
 
     const handleMouseUp = () => {
       setDragging(false);
+      setGuides({ v: null, h: null });
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-  }, [id, width, height, onMove, onSelect]);
+  }, [id, width, height, onMove, onSelect, otherRects, pageWidth, pageHeight]);
 
   const handleResizeMouseDown = useCallback((dir: HandleDir, e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,7 +154,7 @@ export default function DraggableField({
   const textSize = fontSizeForFieldHeight(height);
   const seal = fieldType === "seal" ? sealByStampLabel(value) : null;
   const check = fieldType === "checkmark" || fieldType === "checkbox" ? checkAppearance(value) : null;
-  const showChrome = hovered || dragging || selected;
+  const showChrome = hovered || dragging || selected || fieldType === "signature" || fieldType === "initials" || fieldType === "seal";
   const textLike = isTextLikeField(fieldType);
   const decorations = [style.underline ? "underline" : "", style.strikethrough ? "line-through" : ""].filter(Boolean).join(" ");
 
