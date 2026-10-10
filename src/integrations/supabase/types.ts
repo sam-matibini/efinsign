@@ -486,6 +486,7 @@ export type Database = {
           logo_url: string | null
           name: string
           postal_code: string | null
+          seal_stamp: string | null
           telephone: string | null
         }
         Insert: {
@@ -500,6 +501,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           postal_code?: string | null
+          seal_stamp?: string | null
           telephone?: string | null
         }
         Update: {
@@ -514,6 +516,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           postal_code?: string | null
+          seal_stamp?: string | null
           telephone?: string | null
         }
         Relationships: []
@@ -967,6 +970,17 @@ export type Database = {
         Returns: boolean
       }
       signer_token: { Args: never; Returns: string }
+      upsert_own_profile: {
+        Args: { _full_name: string }
+        Returns: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+      }
     }
     Enums: {
       app_role: "platform_admin"

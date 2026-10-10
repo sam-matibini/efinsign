@@ -20,6 +20,9 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy } from "lucide-react";
 import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
+import { upsertOwnProfile } from "@/lib/upsertOwnProfile";
+import { readOrgSeal, writeOrgSeal } from "@/lib/orgSeal";
+import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,6 +107,7 @@ export default function OrgSettings() {
   const [orgEmail, setOrgEmail] = useState("");
   const [orgTelephone, setOrgTelephone] = useState("");
   const [orgCellNumber, setOrgCellNumber] = useState("");
+  const [orgSeal, setOrgSeal] = useState<string>("none");
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -148,6 +152,7 @@ export default function OrgSettings() {
     setOrgEmail(currentOrg.email || "");
     setOrgTelephone(currentOrg.telephone || "");
     setOrgCellNumber(currentOrg.cell_number || "");
+    setOrgSeal(readOrgSeal(currentOrg.id, currentOrg.seal_stamp) || "none");
     fetchMembers();
     fetchInvitations();
     fetchSignatures();
@@ -171,9 +176,9 @@ export default function OrgSettings() {
   const handleSaveProfile = async () => {
     if (!user) return;
     setSavingProfile(true);
-    const { error } = await supabase.from("profiles").update({ full_name: fullName }).eq("user_id", user.id);
+    const { error } = await upsertOwnProfile(user.id, fullName);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       setSavingProfile(false);
       return;
     }
@@ -285,10 +290,19 @@ export default function OrgSettings() {
         email: orgEmail || null,
         telephone: orgTelephone || null,
         cell_number: orgCellNumber || null,
+        seal_stamp: orgSeal === "none" ? null : orgSeal,
       } as any)
       .eq("id", currentOrg.id);
-    if (error) toast.error("Failed to update");
-    else toast.success("Organization updated");
+    writeOrgSeal(currentOrg.id, orgSeal === "none" ? null : orgSeal);
+    if (error) {
+      if (String(error.message || "").toLowerCase().includes("seal_stamp")) {
+        toast.success("Company seal saved on this device. Deploy the latest database migration to sync it for the whole team.");
+      } else {
+        toast.error("Failed to update");
+      }
+    } else {
+      toast.success("Organization updated");
+    }
     setSaving(false);
   };
 
@@ -613,6 +627,32 @@ export default function OrgSettings() {
           <div className="space-y-2">
             <Label>Cell Number</Label>
             <Input type="tel" value={orgCellNumber} onChange={(e) => setOrgCellNumber(e.target.value)} disabled={!isAdmin} placeholder="+1 (555) 000-0000" />
+          </div>
+          <div className="space-y-2">
+            <Label>Company seal</Label>
+            <p className="text-xs text-muted-foreground">The active seal is appended to documents when you prepare or fill and sign.</p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={!isAdmin}
+                onClick={() => setOrgSeal("none")}
+                className={`rounded-md border px-3 py-2 text-xs ${orgSeal === "none" ? "ring-2 ring-primary" : "border-border"}`}
+              >
+                None
+              </button>
+              {COMPANY_SEALS.map((seal) => (
+                <button
+                  key={seal.id}
+                  type="button"
+                  disabled={!isAdmin}
+                  title={seal.legalName}
+                  onClick={() => setOrgSeal(seal.stampLabel)}
+                  className={`rounded-full border bg-card p-1 ${orgSeal === seal.stampLabel ? "ring-2 ring-primary" : "border-border"}`}
+                >
+                  <img src={companySealDataUrl(seal.id)} alt={seal.legalName} className="h-14 w-14" />
+                </button>
+              ))}
+            </div>
           </div>
           {isAdmin && (
             <Button onClick={handleSaveOrg} disabled={saving}>

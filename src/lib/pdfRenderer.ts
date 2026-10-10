@@ -4,6 +4,9 @@ import { pdfFontSizeForField } from "@/lib/fieldFont";
 import { checkAppearance } from "@/lib/checkStyles";
 import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
 import { drawCheckOnPage } from "@/components/pdf-editor/savePdfDocument";
+import { editorFontPdf } from "@/lib/editorFonts";
+import { decodeFieldValue } from "@/lib/fieldStyle";
+import { alignedLineX } from "@/lib/textLayout";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -111,6 +114,33 @@ export async function generateSignedPdf(
   // 3. Embed fields into PDF
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const helveticaOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const helveticaBoldOblique = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+  const times = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
+  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  const courierBold = await pdfDoc.embedFont(StandardFonts.CourierBold);
+  const courierOblique = await pdfDoc.embedFont(StandardFonts.CourierOblique);
+  const courierBoldOblique = await pdfDoc.embedFont(StandardFonts.CourierBoldOblique);
+  const pickFieldFont = (family?: string, bold?: boolean, italic?: boolean) => {
+    const pdf = editorFontPdf(family);
+    if (pdf === "times") {
+      if (bold && italic) return timesBoldItalic;
+      if (italic) return timesItalic;
+      return bold ? timesBold : times;
+    }
+    if (pdf === "courier") {
+      if (bold && italic) return courierBoldOblique;
+      if (italic) return courierOblique;
+      return bold ? courierBold : courier;
+    }
+    if (bold && italic) return helveticaBoldOblique;
+    if (italic) return helveticaOblique;
+    return bold ? helveticaBold : font;
+  };
   const pages = pdfDoc.getPages();
 
   // Device timezone abbreviation (e.g. EST, PST, CET)
@@ -200,29 +230,39 @@ export async function generateSignedPdf(
       field.field_type === "title"
     ) {
       if (!field.value) continue;
+      const decoded = decodeFieldValue(field.value);
+      if (!decoded.text) continue;
       const size = pdfFontSizeForField(pdfH);
       const maxW = Math.max(8, pdfW - 2);
-      const lines = wrapTextToWidth(field.value, maxW, (sample) => font.widthOfTextAtSize(sample, size));
-      const lineHeight = size * 1.2;
-      if (lines.length <= 1) {
-        const line = lines[0] || "";
-        if (line) {
-          page.drawText(line, {
-            x: pdfX + 1,
-            y: pdfY + Math.max(2, pdfH * 0.3),
-            size,
-            font,
-            color: rgb(0, 0, 0),
-          });
-        }
-      } else {
-        lines.forEach((line, i) => {
-          if (!line) return;
-          const y = pdfY + pdfH - size - 1 - i * lineHeight;
-          if (y < pdfY - 2) return;
-          page.drawText(line, { x: pdfX + 1, y, size, font, color: rgb(0, 0, 0) });
+      const textFont = pickFieldFont(decoded.style.fontFamily, decoded.style.bold, decoded.style.italic);
+      const hex = decoded.style.color && /^#[0-9a-fA-F]{6}$/.test(decoded.style.color) ? decoded.style.color : "#000000";
+      const color = rgb(parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255);
+      if (decoded.style.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(decoded.style.backgroundColor)) {
+        const bg = decoded.style.backgroundColor;
+        page.drawRectangle({
+          x: pdfX, y: pdfY, width: pdfW, height: pdfH,
+          color: rgb(parseInt(bg.slice(1, 3), 16) / 255, parseInt(bg.slice(3, 5), 16) / 255, parseInt(bg.slice(5, 7), 16) / 255),
+          borderWidth: 0,
         });
       }
+      const lines = wrapTextToWidth(decoded.text, maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
+      const lineHeight = size * (decoded.style.lineHeight ?? 1.2);
+      lines.forEach((line, i) => {
+        if (!line) return;
+        const lineWidth = textFont.widthOfTextAtSize(line, size);
+        const x = alignedLineX(pdfX + 1, maxW, lineWidth, decoded.style.align ?? "left");
+        const y = lines.length <= 1
+          ? pdfY + Math.max(2, pdfH * 0.3)
+          : pdfY + pdfH - size - 1 - i * lineHeight;
+        if (y < pdfY - 2) return;
+        page.drawText(line, { x, y, size, font: textFont, color });
+        if (decoded.style.underline) {
+          page.drawLine({ start: { x, y: y - size * 0.12 }, end: { x: x + lineWidth, y: y - size * 0.12 }, color, thickness: Math.max(0.5, size * 0.06) });
+        }
+        if (decoded.style.strikethrough) {
+          page.drawLine({ start: { x, y: y + size * 0.28 }, end: { x: x + lineWidth, y: y + size * 0.28 }, color, thickness: Math.max(0.5, size * 0.06) });
+        }
+      });
     } else if (field.field_type === "checkbox" || field.field_type === "checkmark") {
       const appearance = checkAppearance(field.value);
       if (appearance.filled || field.field_type === "checkbox" && (field.value === "true" || field.value === "checked")) {

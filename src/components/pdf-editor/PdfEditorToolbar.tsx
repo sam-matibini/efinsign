@@ -80,6 +80,7 @@ interface PdfEditorToolbarProps {
   canRedo: boolean;
   onOpenWatermark: () => void;
   onOpenHeaderFooter: () => void;
+  onNextAction?: () => void;
 }
 
 export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
@@ -97,7 +98,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     shapeFillColor, setShapeFillColor, shapeStrokeWidth, setShapeStrokeWidth,
     onImageUpload, saving, onSave, onBack,
     onUndo, onRedo, canUndo, canRedo,
-    onOpenWatermark, onOpenHeaderFooter,
+    onOpenWatermark, onOpenHeaderFooter, onNextAction,
   } = props;
 
   const tools: { mode: ToolMode; icon: any; label: string }[] = [
@@ -138,7 +139,10 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
             variant={tool === mode ? "default" : "ghost"}
             size="sm"
             className="gap-1 text-xs"
-            onClick={() => setTool(mode)}
+            onClick={() => {
+              if (mode === "sticky" && onNextAction) onNextAction();
+              else setTool(mode);
+            }}
           >
             <Icon className="h-3.5 w-3.5" /> {label}
           </Button>

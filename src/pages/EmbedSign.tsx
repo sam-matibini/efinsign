@@ -16,6 +16,7 @@ import { CheckCircle2, XCircle, PenTool, Type, Calendar, Check, Hash, User, Brie
 import CelebrationConfetti from "@/components/CelebrationConfetti";
 import type { Tables } from "@/integrations/supabase/types";
 import { generateAndUploadSignedPdf } from "@/lib/pdfRenderer";
+import { closeSigningWindow } from "@/lib/closeSigningWindow";
 import { format } from "date-fns";
 import { EmbedProvider, useEmbed } from "@/components/embed/EmbedProvider";
 import { useEmbedConfig } from "@/components/embed/EmbedConfig";
@@ -275,6 +276,7 @@ function EmbedSignInner() {
         <CheckCircle2 className="h-16 w-16" style={{ color: primaryColor }} />
         <h2 className="text-xl font-bold">Document Signed</h2>
         <p className="text-sm text-muted-foreground">Thank you, {signer?.name}.</p>
+        <Button onClick={() => closeSigningWindow()}>Close</Button>
       </div>
     );
   }

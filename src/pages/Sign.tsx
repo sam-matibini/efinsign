@@ -23,6 +23,9 @@ import efinsignLogo from "@/assets/efinsign-logo.png";
 import CelebrationConfetti from "@/components/CelebrationConfetti";
 import type { Tables } from "@/integrations/supabase/types";
 import { generateAndUploadSignedPdf } from "@/lib/pdfRenderer";
+import { closeSigningWindow } from "@/lib/closeSigningWindow";
+import FieldFormatBar from "@/components/FieldFormatBar";
+import { decodeFieldValue, encodeFieldValue, EMPTY_FIELD_STYLE, type FieldStyle } from "@/lib/fieldStyle";
 import { format } from "date-fns";
 import { fontSizeForFieldHeight } from "@/lib/fieldFont";
 import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
@@ -60,6 +63,7 @@ export default function Sign() {
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [textInputValue, setTextInputValue] = useState("");
+  const [textStyle, setTextStyle] = useState<FieldStyle>(EMPTY_FIELD_STYLE);
 
   // Guided navigation state
   const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
@@ -230,9 +234,9 @@ export default function Sign() {
       // Auto-advance after toggle
       setTimeout(() => advanceToNextUnfilled(field.id), 300);
     } else {
-      const preset = field.localValue
-        || (type === "full_name" ? signer?.name || "" : "");
-      setTextInputValue(preset);
+      const decoded = decodeFieldValue(field.localValue || (type === "full_name" ? signer?.name || "" : ""));
+      setTextInputValue(decoded.text);
+      setTextStyle({ ...EMPTY_FIELD_STYLE, ...decoded.style });
       setTextDialogOpen(true);
     }
   }, [updateFieldValue, advanceToNextUnfilled, signer]);
@@ -249,7 +253,7 @@ export default function Sign() {
 
   const handleTextSave = useCallback(() => {
     if (activeField && textInputValue.trim()) {
-      updateFieldValue(activeField.id, textInputValue.trim());
+      updateFieldValue(activeField.id, encodeFieldValue(textInputValue.trim(), textStyle));
       // Auto-advance after text save
       setTimeout(() => advanceToNextUnfilled(activeField.id), 300);
     }
@@ -589,10 +593,7 @@ export default function Sign() {
               </Button>
               <Button
                 size="lg"
-                onClick={() => {
-                  window.close();
-                  setTimeout(() => toast.info("You can safely close this tab manually"), 300);
-                }}
+                onClick={() => closeSigningWindow()}
               >
                 😊 Close
               </Button>
@@ -905,6 +906,7 @@ export default function Sign() {
             <DialogTitle>Enter {getFieldLabel(activeField?.field_type)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <FieldFormatBar style={textStyle} onChange={setTextStyle} />
             <Textarea
               autoFocus
               rows={3}
@@ -913,6 +915,15 @@ export default function Sign() {
               onChange={e => setTextInputValue(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTextSave(); } }}
               className="whitespace-pre-wrap break-words"
+              style={{
+                fontFamily: textStyle.fontFamily,
+                fontWeight: textStyle.bold ? 700 : 400,
+                fontStyle: textStyle.italic ? "italic" : "normal",
+                textDecoration: [textStyle.underline ? "underline" : "", textStyle.strikethrough ? "line-through" : ""].filter(Boolean).join(" ") || undefined,
+                color: textStyle.color,
+                backgroundColor: textStyle.backgroundColor && textStyle.backgroundColor !== "none" ? textStyle.backgroundColor : undefined,
+                textAlign: textStyle.align,
+              }}
             />
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setTextDialogOpen(false); setActiveField(null); }}>Cancel</Button>

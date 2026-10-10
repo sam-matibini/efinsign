@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
+import { upsertOwnProfile } from "@/lib/upsertOwnProfile";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -24,9 +25,9 @@ export default function SettingsPage() {
   const handleSave = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase.from("profiles").update({ full_name: fullName }).eq("user_id", user.id);
+    const { error } = await upsertOwnProfile(user.id, fullName);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       setLoading(false);
       return;
     }

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { upsertOwnProfile } from "@/lib/upsertOwnProfile";
 
 export function ProfileCompletionGate() {
   const { user } = useAuth();
@@ -37,12 +38,10 @@ export function ProfileCompletionGate() {
   const handleSave = async () => {
     if (!user || !fullName.trim()) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({ user_id: user.id, full_name: fullName.trim() }, { onConflict: "user_id" });
+    const { error } = await upsertOwnProfile(user.id, fullName);
     setSaving(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       return;
     }
     toast.success("Welcome!");
@@ -50,7 +49,7 @@ export function ProfileCompletionGate() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => { /* required */ }}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-sm" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Complete your profile</DialogTitle>

@@ -83,6 +83,8 @@ describe("PDF editor enhancements", () => {
     expect(screen.getByTitle("Text background")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Signature" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(toolbarProps.setTool).toHaveBeenCalledWith("sticky");
     rerender(<PdfEditorToolbar {...toolbarProps} tool="shape" />);
     expect(screen.getByTitle("Triangle")).toBeInTheDocument();
     expect(screen.getByTitle("Diamond")).toBeInTheDocument();

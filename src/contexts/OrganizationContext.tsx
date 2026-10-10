@@ -15,6 +15,7 @@ export interface Organization {
   city: string | null;
   postal_code: string | null;
   country: string | null;
+  seal_stamp?: string | null;
 }
 
 interface OrgMembership {

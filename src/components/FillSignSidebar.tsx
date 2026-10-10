@@ -52,6 +52,7 @@ interface FillSignSidebarProps {
   checkStyle?: CheckStyle;
   onCheckStyle?: (style: CheckStyle) => void;
   onPlaceSeal?: (stampLabel: string) => void;
+  onNext?: () => void;
 }
 
 export default function FillSignSidebar({
@@ -79,6 +80,7 @@ export default function FillSignSidebar({
   checkStyle,
   onCheckStyle,
   onPlaceSeal,
+  onNext,
 }: FillSignSidebarProps) {
   const [captureMode, setCaptureMode] = useState<"signature" | "initials" | null>(null);
   const [pickerMode, setPickerMode] = useState<"signature" | "initials" | null>(null);
@@ -285,6 +287,12 @@ export default function FillSignSidebar({
           </div>
         </CardContent>
       </Card>
+
+      {onNext && (
+        <Button variant="default" className="w-full gap-1.5" onClick={onNext}>
+          Next
+        </Button>
+      )}
 
       {/* Action buttons */}
       <div className="flex gap-2">

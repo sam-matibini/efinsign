@@ -1,8 +1,10 @@
 import { useRef, useState, useCallback } from "react";
-import { X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Trash2, X } from "lucide-react";
 import { fontSizeForFieldHeight, isTextLikeField } from "@/lib/fieldFont";
 import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
 import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
+import { editorFontCss } from "@/lib/editorFonts";
+import { decodeFieldValue, type FieldStyle } from "@/lib/fieldStyle";
 
 interface DraggableFieldProps {
   id: string;
@@ -14,33 +16,40 @@ interface DraggableFieldProps {
   label: string;
   value?: string | null;
   fieldType?: string;
+  selected?: boolean;
   onMove: (id: string, x: number, y: number) => void;
   onResize?: (id: string, width: number, height: number, x?: number, y?: number) => void;
   onDelete?: (id: string) => void;
   onAdjustFont?: (id: string, direction: 1 | -1) => void;
+  onEdit?: (id: string) => void;
+  onSelect?: (id: string) => void;
 }
 
 const MIN_W = 40;
 const MIN_H = 20;
-const HANDLE_SIZE = 6;
+const HANDLE_SIZE = 8;
 
-type Corner = "nw" | "ne" | "sw" | "se";
+type HandleDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
-const CURSORS: Record<Corner, string> = {
-  nw: "nwse-resize",
-  se: "nwse-resize",
-  ne: "nesw-resize",
-  sw: "nesw-resize",
+const CURSORS: Record<HandleDir, string> = {
+  nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize",
+  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
 };
 
-export default function DraggableField({ id, x, y, width, height, color, label, value, fieldType, onMove, onResize, onDelete, onAdjustFont }: DraggableFieldProps) {
+export default function DraggableField({
+  id, x, y, width, height, color, label, value, fieldType, selected,
+  onMove, onResize, onDelete, onAdjustFont, onEdit, onSelect,
+}: DraggableFieldProps) {
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
   const offsetRef = useRef({ x: 0, y: 0 });
+  const decoded = decodeFieldValue(value);
+  const style: FieldStyle = decoded.style;
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    onSelect?.(id);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     offsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     setDragging(true);
@@ -63,9 +72,9 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-  }, [id, width, height, onMove]);
+  }, [id, width, height, onMove, onSelect]);
 
-  const handleResizeMouseDown = useCallback((corner: Corner, e: React.MouseEvent) => {
+  const handleResizeMouseDown = useCallback((dir: HandleDir, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!onResize) return;
@@ -80,35 +89,21 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
     const handleMouseMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
-
       let newW = startW;
       let newH = startH;
       let newX = startFieldX;
       let newY = startFieldY;
 
-      switch (corner) {
-        case "se":
-          newW = Math.max(MIN_W, startW + dx);
-          newH = Math.max(MIN_H, startH + dy);
-          break;
-        case "sw":
-          newW = Math.max(MIN_W, startW - dx);
-          newH = Math.max(MIN_H, startH + dy);
-          newX = startFieldX + startW - newW;
-          break;
-        case "ne":
-          newW = Math.max(MIN_W, startW + dx);
-          newH = Math.max(MIN_H, startH - dy);
-          newY = startFieldY + startH - newH;
-          break;
-        case "nw":
-          newW = Math.max(MIN_W, startW - dx);
-          newH = Math.max(MIN_H, startH - dy);
-          newX = startFieldX + startW - newW;
-          newY = startFieldY + startH - newH;
-          break;
+      if (dir.includes("e")) newW = Math.max(MIN_W, startW + dx);
+      if (dir.includes("w")) {
+        newW = Math.max(MIN_W, startW - dx);
+        newX = startFieldX + startW - newW;
       }
-
+      if (dir.includes("s")) newH = Math.max(MIN_H, startH + dy);
+      if (dir.includes("n")) {
+        newH = Math.max(MIN_H, startH - dy);
+        newY = startFieldY + startH - newH;
+      }
       onResize(id, Math.round(newW), Math.round(newH), Math.round(newX), Math.round(newY));
     };
 
@@ -121,71 +116,127 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
     window.addEventListener("mouseup", handleMouseUp);
   }, [id, x, y, width, height, onResize]);
 
-  const handleStyle = (corner: Corner): React.CSSProperties => {
+  const handleStyle = (dir: HandleDir): React.CSSProperties => {
+    const half = HANDLE_SIZE / 2;
     const base: React.CSSProperties = {
       position: "absolute",
       width: HANDLE_SIZE,
       height: HANDLE_SIZE,
       backgroundColor: color,
-      cursor: CURSORS[corner],
+      cursor: CURSORS[dir],
       zIndex: 10,
     };
-    switch (corner) {
-      case "nw": return { ...base, top: -HANDLE_SIZE / 2, left: -HANDLE_SIZE / 2 };
-      case "ne": return { ...base, top: -HANDLE_SIZE / 2, right: -HANDLE_SIZE / 2 };
-      case "sw": return { ...base, bottom: -HANDLE_SIZE / 2, left: -HANDLE_SIZE / 2 };
-      case "se": return { ...base, bottom: -HANDLE_SIZE / 2, right: -HANDLE_SIZE / 2 };
-    }
+    const map: Record<HandleDir, React.CSSProperties> = {
+      nw: { ...base, top: -half, left: -half },
+      ne: { ...base, top: -half, right: -half },
+      sw: { ...base, bottom: -half, left: -half },
+      se: { ...base, bottom: -half, right: -half },
+      n: { ...base, top: -half, left: width / 2 - half },
+      s: { ...base, bottom: -half, left: width / 2 - half },
+      e: { ...base, right: -half, top: height / 2 - half },
+      w: { ...base, left: -half, top: height / 2 - half },
+    };
+    return map[dir];
   };
 
-  const corners: Corner[] = ["nw", "ne", "sw", "se"];
+  const dirs: HandleDir[] = ["nw", "ne", "sw", "se", "n", "s", "e", "w"];
   const textSize = fontSizeForFieldHeight(height);
   const seal = fieldType === "seal" ? sealByStampLabel(value) : null;
   const check = fieldType === "checkmark" || fieldType === "checkbox" ? checkAppearance(value) : null;
+  const showChrome = hovered || dragging || selected;
+  const textLike = isTextLikeField(fieldType);
+  const decorations = [style.underline ? "underline" : "", style.strikethrough ? "line-through" : ""].filter(Boolean).join(" ");
+
+  const nudge = (dx: number, dy: number) => onMove(id, Math.max(0, x + dx), Math.max(0, y + dy));
 
   return (
     <div
-      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none overflow-hidden ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-80 cursor-move"}`}
+      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none overflow-visible ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-90 cursor-move"}`}
       style={{
         left: x,
         top: y,
         width,
         height,
         borderColor: color,
-        backgroundColor: (fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image") ? "transparent" : `${color}20`,
-        color,
+        outline: selected ? "2px dashed hsl(var(--primary))" : "none",
+        outlineOffset: 2,
+        backgroundColor: (fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image")
+          ? "transparent"
+          : style.backgroundColor && style.backgroundColor !== "none"
+            ? style.backgroundColor
+            : `${color}20`,
+        color: style.color || color,
       }}
       onMouseDown={handleMouseDown}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onEdit && (textLike || fieldType === "signature" || fieldType === "initials")) onEdit(id);
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal") && (value?.startsWith("data:image") || seal) ? (
-        <img src={seal ? companySealDataUrl(seal.id) : value!} alt={fieldType} className="w-full h-full object-contain pointer-events-none" draggable={false} />
-      ) : check?.filled ? (
-        <span className="font-bold text-green-700 leading-none" style={{ fontSize: textSize }}>{checkGlyph(check.style)}</span>
-      ) : isTextLikeField(fieldType) && value ? (
-        <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left" style={{ fontSize: textSize }}>{value}</span>
-      ) : value && !value.startsWith("style:") ? (
-        <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left" style={{ fontSize: textSize }}>{value}</span>
-      ) : (
-        label
+      <div className="w-full h-full overflow-hidden flex items-center justify-center pointer-events-none">
+        {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal") && (value?.startsWith("data:image") || seal) ? (
+          <img src={seal ? companySealDataUrl(seal.id) : value!} alt={fieldType} className="w-full h-full object-contain" draggable={false} />
+        ) : check?.filled ? (
+          <span className="font-bold text-green-700 leading-none" style={{ fontSize: textSize }}>{checkGlyph(check.style)}</span>
+        ) : textLike && decoded.text ? (
+          <span
+            className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight"
+            style={{
+              fontSize: textSize,
+              textAlign: style.align || "left",
+              fontFamily: editorFontCss(style.fontFamily),
+              fontWeight: style.bold ? 700 : 400,
+              fontStyle: style.italic ? "italic" : "normal",
+              textDecoration: decorations || undefined,
+              lineHeight: style.lineHeight || 1.25,
+              color: style.color || color,
+            }}
+          >
+            {decoded.text}
+          </span>
+        ) : value && !value.startsWith("style:") && !value.startsWith("data:") ? (
+          <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left" style={{ fontSize: textSize }}>{decoded.text || value}</span>
+        ) : (
+          label
+        )}
+      </div>
+      {showChrome && (
+        <div className="absolute -top-8 left-0 flex items-center gap-0.5 bg-card border border-border rounded-md px-0.5 py-0.5 shadow-sm z-20" onMouseDown={(e) => e.stopPropagation()}>
+          <button type="button" className="h-6 w-6 flex items-center justify-center" title="Move up" onClick={() => nudge(0, -1)}><ArrowUp className="h-3 w-3" /></button>
+          <button type="button" className="h-6 w-6 flex items-center justify-center" title="Move down" onClick={() => nudge(0, 1)}><ArrowDown className="h-3 w-3" /></button>
+          <button type="button" className="h-6 w-6 flex items-center justify-center" title="Move left" onClick={() => nudge(-1, 0)}><ArrowLeft className="h-3 w-3" /></button>
+          <button type="button" className="h-6 w-6 flex items-center justify-center" title="Move right" onClick={() => nudge(1, 0)}><ArrowRight className="h-3 w-3" /></button>
+          {onDelete && (
+            <button
+              type="button"
+              className="h-6 w-6 flex items-center justify-center text-destructive"
+              title="Delete field"
+              onClick={() => onDelete(id)}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       )}
-      {(hovered || dragging) && onAdjustFont && isTextLikeField(fieldType) && (
+      {showChrome && onAdjustFont && textLike && (
         <div className="absolute -bottom-7 left-0 flex gap-1 z-20" onMouseDown={(e) => e.stopPropagation()}>
           <button type="button" className="h-6 px-1.5 rounded bg-card border text-[11px]" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, -1); }}>A−</button>
           <span className="h-6 px-1 rounded bg-card border text-[10px] flex items-center">{textSize}</span>
           <button type="button" className="h-6 px-1.5 rounded bg-card border text-xs font-semibold" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, 1); }}>A+</button>
         </div>
       )}
-      {(hovered || dragging) && onDelete && (
+      {onDelete && (
         <button
           className="absolute -top-3 -right-3 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:bg-destructive/90 z-20"
+          title="Delete"
           onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(id); }}
         >
           <X className="h-3 w-3" />
         </button>
       )}
-      {(hovered || dragging) && onResize && corners.map((c) => (
+      {showChrome && onResize && dirs.map((c) => (
         <div key={c} style={handleStyle(c)} onMouseDown={(e) => handleResizeMouseDown(c, e)} />
       ))}
     </div>

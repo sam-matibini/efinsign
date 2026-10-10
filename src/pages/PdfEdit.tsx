@@ -297,6 +297,25 @@ export default function PdfEdit() {
     [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize, textAlign]
   );
 
+  const handleNextAction = useCallback(() => {
+    const hasSig = annotations.some((a) => a.type === "signature");
+    const nextTool = hasSig ? "text" : "signature";
+    const note = hasSig ? "Next — add or edit text here." : "Next — add your signature here.";
+    setTool(nextTool);
+    setAnnotations((prev) => [...prev, {
+      type: "sticky",
+      id: genId(),
+      pageIndex: activePageIndex,
+      x: 36,
+      y: 36,
+      width: 180,
+      height: 90,
+      text: note,
+      color: "#fde047",
+    }]);
+    toast.message(hasSig ? "Next: add text on the page" : "Next: place your signature");
+  }, [activePageIndex, annotations, setAnnotations]);
+
   const textCommitRef = useRef(false);
   const pendingTextAnnotation = useCallback(() => {
     if (!editingText) return null;
@@ -536,6 +555,7 @@ export default function PdfEdit() {
         canUndo={canUndo} canRedo={canRedo}
         onOpenWatermark={() => setWatermarkOpen(true)}
         onOpenHeaderFooter={() => setHeaderFooterOpen(true)}
+        onNextAction={handleNextAction}
       />
 
       <div className="flex flex-1 min-h-0">

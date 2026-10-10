@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import PdfViewer from "@/components/PdfViewer";
@@ -14,7 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase, ChevronUp, ChevronDown, ArrowRight } from "lucide-react";
+import FieldFormatBar from "@/components/FieldFormatBar";
+import { decodeFieldValue, encodeFieldValue, EMPTY_FIELD_STYLE, type FieldStyle } from "@/lib/fieldStyle";
+import { nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
+import { readOrgSeal } from "@/lib/orgSeal";
+import { isTextLikeField } from "@/lib/fieldFont";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables } from "@/integrations/supabase/types";
 import { accountFieldValue, buildAccountDetails, isAccountHolder, readAccountTitle, type AccountDetails } from "@/lib/accountProfile";
@@ -80,12 +85,16 @@ export default function DocumentPrepare() {
   // Text input dialog state
   const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [textValue, setTextValue] = useState("");
+  const [textStyle, setTextStyle] = useState<FieldStyle>(EMPTY_FIELD_STYLE);
+  const [textEditId, setTextEditId] = useState<string | null>(null);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [textFieldKind, setTextFieldKind] = useState<"text" | "full_name" | "title">("text");
   const [accountDetails, setAccountDetails] = useState<AccountDetails>(() => buildAccountDetails({}));
   const [signingMessage, setSigningMessage] = useState("");
   const [expiresInDays, setExpiresInDays] = useState("none");
   const [checkStyle, setCheckStyle] = useState<CheckStyle>("check");
   const [pendingSeal, setPendingSeal] = useState<string | null>(null);
+  const sealAppendedRef = useRef(false);
 
   // Save as template dialog
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -137,10 +146,28 @@ export default function DocumentPrepare() {
       setSigners(signersRes.data || []);
       setFields(fieldsRes.data || []);
       setLoading(false);
+      const stamp = readOrgSeal(currentOrg?.id, currentOrg?.seal_stamp);
+      const loadedFields = fieldsRes.data || [];
+      const signerId = signersRes.data?.[0]?.id;
+      if (stamp && signerId && id && !sealAppendedRef.current && !loadedFields.some((f) => f.field_type === "seal")) {
+        sealAppendedRef.current = true;
+        const { data: sealField } = await supabase.from("document_fields").insert({
+          document_id: id,
+          signer_id: signerId,
+          field_type: "seal",
+          page_number: 1,
+          x: 48,
+          y: 48,
+          width: 140,
+          height: 140,
+          value: stamp,
+        }).select().single();
+        if (sealField) setFields((prev) => [...prev, sealField]);
+      }
     };
     load();
     return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
-  }, [id, user]);
+  }, [id, user, currentOrg?.id, currentOrg?.seal_stamp]);
 
   useEffect(() => {
     if (!user) return;
@@ -218,6 +245,8 @@ export default function DocumentPrepare() {
         ? accountDetails.title
         : "";
     setTextValue(preset);
+    setTextStyle(EMPTY_FIELD_STYLE);
+    setTextEditId(null);
     setTextDialogOpen(true);
   };
 
@@ -225,6 +254,16 @@ export default function DocumentPrepare() {
 
   const handleTextDialogConfirm = async () => {
     if (!textValue.trim()) { toast.error("Enter some text"); return; }
+    const encoded = encodeFieldValue(textValue.trim(), textStyle);
+    if (textEditId) {
+      const updater = (prev: DocField[]) => prev.map((f) => f.id === textEditId ? { ...f, value: encoded } : f);
+      setFields(updater);
+      setSelfFields(updater);
+      await supabase.from("document_fields").update({ value: encoded }).eq("id", textEditId);
+      setTextDialogOpen(false);
+      setTextEditId(null);
+      return;
+    }
     setTextDialogOpen(false);
     setPendingFieldType(textFieldKind);
   };
@@ -238,8 +277,10 @@ export default function DocumentPrepare() {
       forAccountHolder,
       useTypedText: pendingFieldType === fieldType && !!textValue.trim(),
     });
-    return value ? { value } : {};
-  }, [accountDetails, savedSignature, savedInitials, textValue, pendingFieldType, user]);
+    if (!value) return {};
+    if (isTextLikeField(fieldType)) return { value: encodeFieldValue(value, textStyle) };
+    return { value };
+  }, [accountDetails, savedSignature, savedInitials, textValue, pendingFieldType, user, textStyle]);
 
   const placedExtras = useCallback((fieldType: string, self: boolean, signerEmail?: string | null, sealLabel?: string | null) => {
     if (fieldType === "checkmark") return { value: self ? checkStyle : `style:${checkStyle}` };
@@ -315,6 +356,37 @@ export default function DocumentPrepare() {
     await Promise.all(reordered.map((s) =>
       supabase.from("document_signers").update({ signing_order: s.signing_order }).eq("id", s.id)
     ));
+  };
+
+  const openFieldEditor = (field: DocField) => {
+    setSelectedFieldId(field.id);
+    if (isTextLikeField(field.field_type)) {
+      const decoded = decodeFieldValue(field.value);
+      setTextFieldKind(field.field_type === "full_name" || field.field_type === "title" ? field.field_type : "text");
+      setTextValue(decoded.text);
+      setTextStyle({ ...EMPTY_FIELD_STYLE, ...decoded.style });
+      setTextEditId(field.id);
+      setTextDialogOpen(true);
+      return;
+    }
+    if (field.field_type === "signature") {
+      setPendingFieldType(null);
+      toast.info("Replace this signature by choosing one in the sidebar, or drag the box.");
+    }
+  };
+
+  const handleNextAction = () => {
+    const all = selfSignMode ? selfFields : fields;
+    const unfilled = nextUnfilledField(all);
+    if (unfilled && isTextLikeField(unfilled.field_type)) {
+      openFieldEditor(unfilled);
+      toast.message(`Next: ${unfilled.field_type.replaceAll("_", " ")}`);
+      return;
+    }
+    const nextType = nextUnplacedType(all);
+    if (nextType === "text") openTextDialog("text");
+    else handleFieldTypeClick(nextType);
+    toast.message(`Next: place ${nextType.replaceAll("_", " ")}`);
   };
 
   const handleFieldTypeClick = (fieldType: string) => {
@@ -641,6 +713,12 @@ export default function DocumentPrepare() {
             label={f.field_type}
             value={f.value}
             fieldType={f.field_type}
+            selected={selectedFieldId === f.id}
+            onSelect={setSelectedFieldId}
+            onEdit={(fieldId) => {
+              const field = [...fields, ...selfFields].find((item) => item.id === fieldId);
+              if (field) openFieldEditor(field);
+            }}
             onMove={moveField}
             onResize={resizeField}
             onDelete={removeField}
@@ -719,9 +797,9 @@ export default function DocumentPrepare() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         {/* Left sidebar */}
-        <div className="space-y-4">
+        <div className="space-y-4 xl:col-span-3">
           {selfSignMode ? (
             <FillSignSidebar
               pendingFieldType={pendingFieldType}
@@ -748,6 +826,7 @@ export default function DocumentPrepare() {
               checkStyle={checkStyle}
               onCheckStyle={setCheckStyle}
               onPlaceSeal={(label) => { setPendingSeal(label); setPendingFieldType("seal"); }}
+              onNext={handleNextAction}
             />
           ) : (
             <>
@@ -862,6 +941,9 @@ export default function DocumentPrepare() {
                     <p className="text-xs">Date: {accountDetails.dateLabel}</p>
                     <p className="text-[10px] text-muted-foreground">These fill Full Name, Title, Date, and Signature when you are the signer. Text wraps inside the field.</p>
                   </div>
+                  <Button variant="default" size="sm" className="w-full mb-3 gap-1.5" onClick={handleNextAction}>
+                    <ArrowRight className="h-3.5 w-3.5" /> Next action
+                  </Button>
                   <div className="grid grid-cols-2 gap-2">
                     {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                       <Button
@@ -980,8 +1062,8 @@ export default function DocumentPrepare() {
         </div>
 
         {/* Right: PDF Preview */}
-        <div className="lg:col-span-2">
-          <Card className="bg-card/60 border-border/50 h-[600px] overflow-hidden">
+        <div className="xl:col-span-9">
+          <Card className="bg-card/60 border-border/50 h-[calc(100vh-10rem)] min-h-[720px] overflow-hidden">
             {pdfUrl ? (
               <PdfViewer
                 url={pdfUrl}
@@ -1009,6 +1091,7 @@ export default function DocumentPrepare() {
               {textFieldKind === "full_name" ? "Full name" : textFieldKind === "title" ? "Title" : "Enter text"}
             </DialogTitle>
           </DialogHeader>
+          <FieldFormatBar style={textStyle} onChange={setTextStyle} />
           <Textarea
             placeholder={textFieldKind === "text" ? "Type your text. It wraps inside the field." : "Prefilled from your account. Edit it if you need to."}
             value={textValue}
@@ -1019,8 +1102,8 @@ export default function DocumentPrepare() {
             className="whitespace-pre-wrap break-words"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTextDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleTextDialogConfirm}>Place on Document</Button>
+            <Button variant="outline" onClick={() => { setTextDialogOpen(false); setTextEditId(null); }}>Cancel</Button>
+            <Button onClick={handleTextDialogConfirm}>{textEditId ? "Update text" : "Place on Document"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
