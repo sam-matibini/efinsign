@@ -14,8 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase } from "lucide-react";
+import { Plus, Trash2, Send, UserPlus, Type, PenTool, Calendar, FileSignature, X, CheckCircle, ArrowLeft, Save, User, Briefcase, ChevronUp, ChevronDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables } from "@/integrations/supabase/types";
+import { accountFieldValue, buildAccountDetails, isAccountHolder, readAccountTitle, type AccountDetails } from "@/lib/accountProfile";
+import { stepFieldHeight } from "@/lib/fieldFont";
+import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
+import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
 
 type Signer = Tables<"document_signers">;
 type DocField = Tables<"document_fields">;
@@ -24,19 +29,19 @@ const SIGNER_COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6"];
 const FIELD_TYPES = [
   { type: "signature", label: "Signature", icon: PenTool, w: 200, h: 60 },
   { type: "initials", label: "Initials", icon: FileSignature, w: 80, h: 30 },
-  { type: "full_name", label: "Full Name", icon: User, w: 200, h: 30 },
-  { type: "title", label: "Title", icon: Briefcase, w: 150, h: 30 },
+  { type: "full_name", label: "Full Name", icon: User, w: 220, h: 48 },
+  { type: "title", label: "Title", icon: Briefcase, w: 180, h: 48 },
   { type: "date", label: "Date", icon: Calendar, w: 150, h: 30 },
-  { type: "text", label: "Text", icon: Type, w: 150, h: 30 },
+  { type: "text", label: "Text", icon: Type, w: 220, h: 64 },
 ];
 
 const SELF_SIGN_FIELD_DIMS: Record<string, { w: number; h: number }> = {
   signature: { w: 200, h: 60 },
   initials: { w: 80, h: 30 },
-  full_name: { w: 200, h: 30 },
-  title: { w: 150, h: 30 },
+  full_name: { w: 220, h: 48 },
+  title: { w: 180, h: 48 },
   date: { w: 150, h: 30 },
-  text: { w: 150, h: 30 },
+  text: { w: 220, h: 64 },
   checkmark: { w: 30, h: 30 },
 };
 
@@ -75,6 +80,12 @@ export default function DocumentPrepare() {
   // Text input dialog state
   const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [textValue, setTextValue] = useState("");
+  const [textFieldKind, setTextFieldKind] = useState<"text" | "full_name" | "title">("text");
+  const [accountDetails, setAccountDetails] = useState<AccountDetails>(() => buildAccountDetails({}));
+  const [signingMessage, setSigningMessage] = useState("");
+  const [expiresInDays, setExpiresInDays] = useState("none");
+  const [checkStyle, setCheckStyle] = useState<CheckStyle>("check");
+  const [pendingSeal, setPendingSeal] = useState<string | null>(null);
 
   // Save as template dialog
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -131,6 +142,19 @@ export default function DocumentPrepare() {
     return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
   }, [id, user]);
 
+  useEffect(() => {
+    if (!user) return;
+    const title = readAccountTitle(user.id, (user.user_metadata as { job_title?: string } | undefined)?.job_title);
+    supabase.from("profiles").select("full_name").eq("user_id", user.id).single()
+      .then(({ data }) => {
+        setAccountDetails(buildAccountDetails({
+          fullName: data?.full_name,
+          title,
+          email: user.email,
+        }));
+      });
+  }, [user]);
+
   // Load saved signatures from DB
   useEffect(() => {
     if (!user || !currentOrg) return;
@@ -186,27 +210,67 @@ export default function DocumentPrepare() {
     setDbInitials((prev) => prev.filter((s) => s.id !== sigId));
   };
 
-  const handleTextFieldRequest = () => {
-    setTextValue("");
+  const openTextDialog = (kind: "text" | "full_name" | "title") => {
+    setTextFieldKind(kind);
+    const preset = kind === "full_name"
+      ? accountDetails.fullName
+      : kind === "title"
+        ? accountDetails.title
+        : "";
+    setTextValue(preset);
     setTextDialogOpen(true);
   };
+
+  const handleTextFieldRequest = () => openTextDialog("text");
 
   const handleTextDialogConfirm = async () => {
     if (!textValue.trim()) { toast.error("Enter some text"); return; }
     setTextDialogOpen(false);
-    // Place text field via click - set pending and store value
-    setPendingFieldType("text");
+    setPendingFieldType(textFieldKind);
+  };
+
+  const fieldValueFor = useCallback((fieldType: string, signerEmail?: string | null, self = false) => {
+    const forAccountHolder = self || isAccountHolder(signerEmail, accountDetails.email || user?.email);
+    const value = accountFieldValue(fieldType, accountDetails, {
+      signature: savedSignature,
+      initials: savedInitials,
+      typedText: textValue,
+      forAccountHolder,
+      useTypedText: pendingFieldType === fieldType && !!textValue.trim(),
+    });
+    return value ? { value } : {};
+  }, [accountDetails, savedSignature, savedInitials, textValue, pendingFieldType, user]);
+
+  const placedExtras = useCallback((fieldType: string, self: boolean, signerEmail?: string | null, sealLabel?: string | null) => {
+    if (fieldType === "checkmark") return { value: self ? checkStyle : `style:${checkStyle}` };
+    if (fieldType === "seal") return { value: sealLabel || pendingSeal || "seal:efintax" };
+    return fieldValueFor(fieldType, signerEmail, self);
+  }, [checkStyle, pendingSeal, fieldValueFor]);
+
+  const dimsFor = (fieldType: string) => {
+    if (fieldType === "seal") return { w: 140, h: 140 };
+    if (fieldType === "checkmark") return { w: 36, h: 36 };
+    const known = FIELD_TYPES.find((f) => f.type === fieldType);
+    return known ? { w: known.w, h: known.h } : (SELF_SIGN_FIELD_DIMS[fieldType] || { w: 150, h: 30 });
   };
 
 
-  const addSigner = async () => {
-    if (!newSignerName || !newSignerEmail || !id) return;
+  const addSigner = async (nameArg?: string, emailArg?: string) => {
+    const name = (nameArg ?? newSignerName).trim();
+    const email = (emailArg ?? newSignerEmail).trim();
+    if (!name || !email || !id) return;
+    if (signers.some((s) => s.email.toLowerCase() === email.toLowerCase())) {
+      toast.error("That signer is already on this document");
+      const existing = signers.find((s) => s.email.toLowerCase() === email.toLowerCase());
+      if (existing) setSelectedSigner(existing.id);
+      return;
+    }
     const { data, error } = await supabase
       .from("document_signers")
       .insert({
         document_id: id,
-        name: newSignerName,
-        email: newSignerEmail,
+        name,
+        email,
         signing_order: signers.length + 1,
         color: SIGNER_COLORS[signers.length % SIGNER_COLORS.length],
       })
@@ -216,15 +280,15 @@ export default function DocumentPrepare() {
     setSigners([...signers, data]);
 
     // Auto-save to clients if not already present
-    if (currentOrg && !clients.find((c) => c.email?.toLowerCase() === newSignerEmail.toLowerCase())) {
+    if (currentOrg && !clients.find((c) => c.email?.toLowerCase() === email.toLowerCase())) {
       const { data: newClient } = await supabase
         .from("clients")
-        .insert({ organization_id: currentOrg.id, name: newSignerName, email: newSignerEmail })
+        .insert({ organization_id: currentOrg.id, name, email })
         .select("id, name, email")
         .single();
       if (newClient) {
         setClients((prev) => [...prev, newClient]);
-        toast.success(`Added ${newSignerName} to contacts`);
+        toast.success(`Added ${name} to contacts`);
       }
     }
 
@@ -238,6 +302,19 @@ export default function DocumentPrepare() {
     await supabase.from("document_signers").delete().eq("id", signerId);
     setSigners(signers.filter((s) => s.id !== signerId));
     setFields(fields.filter((f) => f.signer_id !== signerId));
+  };
+
+  const moveSigner = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= signers.length) return;
+    const next = [...signers];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    const reordered = next.map((s, i) => ({ ...s, signing_order: i + 1 }));
+    setSigners(reordered);
+    await Promise.all(reordered.map((s) =>
+      supabase.from("document_signers").update({ signing_order: s.signing_order }).eq("id", s.id)
+    ));
   };
 
   const handleFieldTypeClick = (fieldType: string) => {
@@ -255,7 +332,7 @@ export default function DocumentPrepare() {
       if (selfSignMode) {
         // Self-sign mode: use selfSigner
         if (!selfSigner) return;
-        const dims = SELF_SIGN_FIELD_DIMS[pendingFieldType] || { w: 150, h: 30 };
+        const dims = dimsFor(pendingFieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -267,12 +344,7 @@ export default function DocumentPrepare() {
             y,
             width: dims.w,
             height: dims.h,
-            // Auto-fill value for certain types
-            ...(pendingFieldType === "signature" && savedSignature ? { value: savedSignature } : {}),
-            ...(pendingFieldType === "initials" && savedInitials ? { value: savedInitials } : {}),
-            ...(pendingFieldType === "date" ? { value: new Date().toLocaleDateString() } : {}),
-            ...(pendingFieldType === "checkmark" ? { value: "✓" } : {}),
-            ...(pendingFieldType === "text" && textValue ? { value: textValue } : {}),
+            ...placedExtras(pendingFieldType, true, selfSigner.email),
           })
           .select()
           .single();
@@ -281,8 +353,7 @@ export default function DocumentPrepare() {
       } else {
         // Prepare mode: use selectedSigner
         if (!selectedSigner) return;
-        const fieldDef = FIELD_TYPES.find((f) => f.type === pendingFieldType);
-        if (!fieldDef) return;
+        const dims = dimsFor(pendingFieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -292,8 +363,9 @@ export default function DocumentPrepare() {
             page_number: pageNumber,
             x,
             y,
-            width: fieldDef.w,
-            height: fieldDef.h,
+            width: dims.w,
+            height: dims.h,
+            ...placedExtras(pendingFieldType, false, signers.find((s) => s.id === selectedSigner)?.email),
           })
           .select()
           .single();
@@ -302,18 +374,18 @@ export default function DocumentPrepare() {
       }
       setPendingFieldType(null);
     },
-    [pendingFieldType, selectedSigner, selfSignMode, selfSigner, savedSignature, savedInitials, textValue, id]
+    [pendingFieldType, selectedSigner, selfSignMode, selfSigner, id, signers, placedExtras]
   );
 
   const handlePageDrop = useCallback(
-    async (pageNumber: number, x: number, y: number, fieldType: string) => {
+    async (pageNumber: number, x: number, y: number, fieldType: string, sealLabel?: string) => {
       if (!id) return;
 
       if (selfSignMode) {
         if (!selfSigner) return;
         if (fieldType === "signature" && !savedSignature) { toast.error("Create a signature first"); return; }
         if (fieldType === "initials" && !savedInitials) { toast.error("Create initials first"); return; }
-        const dims = SELF_SIGN_FIELD_DIMS[fieldType] || { w: 150, h: 30 };
+        const dims = dimsFor(fieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -324,11 +396,7 @@ export default function DocumentPrepare() {
             x, y,
             width: dims.w,
             height: dims.h,
-            ...(fieldType === "signature" && savedSignature ? { value: savedSignature } : {}),
-            ...(fieldType === "initials" && savedInitials ? { value: savedInitials } : {}),
-            ...(fieldType === "date" ? { value: new Date().toLocaleDateString() } : {}),
-            ...(fieldType === "checkmark" ? { value: "✓" } : {}),
-            ...(fieldType === "text" && textValue ? { value: textValue } : {}),
+            ...placedExtras(fieldType, true, selfSigner.email, sealLabel),
           })
           .select()
           .single();
@@ -336,8 +404,7 @@ export default function DocumentPrepare() {
         setSelfFields((prev) => [...prev, data]);
       } else {
         if (!selectedSigner) { toast.error("Select a signer first"); return; }
-        const fieldDef = FIELD_TYPES.find((f) => f.type === fieldType);
-        const dims = fieldDef ? { w: fieldDef.w, h: fieldDef.h } : { w: 150, h: 30 };
+        const dims = dimsFor(fieldType);
         const { data, error } = await supabase
           .from("document_fields")
           .insert({
@@ -348,6 +415,7 @@ export default function DocumentPrepare() {
             x, y,
             width: dims.w,
             height: dims.h,
+            ...placedExtras(fieldType, false, signers.find((s) => s.id === selectedSigner)?.email, sealLabel),
           })
           .select()
           .single();
@@ -355,7 +423,7 @@ export default function DocumentPrepare() {
         setFields((prev) => [...prev, data]);
       }
     },
-    [selectedSigner, selfSignMode, selfSigner, savedSignature, savedInitials, textValue, id]
+    [selectedSigner, selfSignMode, selfSigner, id, signers, placedExtras]
   );
 
   const removeField = async (fieldId: string) => {
@@ -388,9 +456,20 @@ export default function DocumentPrepare() {
     // Check that other signers have fields assigned
     const otherSignerFields = fields.filter((f) => otherSigners.some((s) => s.id === f.signer_id));
     if (otherSignerFields.length === 0) { toast.error("Add at least one field for your signers"); return; }
+    if (expiresInDays !== "none") {
+      const days = Number(expiresInDays);
+      if (days > 0) {
+        const expires = new Date();
+        expires.setDate(expires.getDate() + days);
+        await supabase.from("document_signers").update({ expires_at: expires.toISOString() }).eq("document_id", id);
+      }
+    }
     await supabase.from("documents").update({ status: "pending" }).eq("id", id);
     const { data, error } = await supabase.functions.invoke("send-signing-notifications", {
-      body: { document_id: id },
+      body: {
+        document_id: id,
+        ...(signingMessage.trim() ? { message: signingMessage.trim() } : {}),
+      },
     });
     if (error) {
       console.error("Email notification error:", error);
@@ -419,7 +498,7 @@ export default function DocumentPrepare() {
         .from("document_signers")
         .insert({
           document_id: id,
-          name: profile?.full_name || user.email || "Owner",
+          name: accountDetails.fullName || profile?.full_name || user.email || "Owner",
           email: user.email!,
           signing_order: 1,
           color: SIGNER_COLORS[0],
@@ -565,6 +644,11 @@ export default function DocumentPrepare() {
             onMove={moveField}
             onResize={resizeField}
             onDelete={removeField}
+            onAdjustFont={(fieldId, direction) => {
+              const field = [...fields, ...selfFields].find((item) => item.id === fieldId);
+              if (!field) return;
+              resizeField(fieldId, field.width, stepFieldHeight(field.height, direction));
+            }}
           />
         );
       });
@@ -657,6 +741,13 @@ export default function DocumentPrepare() {
               onPersistInitials={persistInitials}
               onDeleteSavedSig={deleteSavedSig}
               onTextFieldRequest={handleTextFieldRequest}
+              onIdentityField={(kind) => openTextDialog(kind)}
+              accountFullName={accountDetails.fullName}
+              accountTitle={accountDetails.title}
+              accountDate={accountDetails.dateLabel}
+              checkStyle={checkStyle}
+              onCheckStyle={setCheckStyle}
+              onPlaceSeal={(label) => { setPendingSeal(label); setPendingFieldType("seal"); }}
             />
           ) : (
             <>
@@ -667,7 +758,7 @@ export default function DocumentPrepare() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {signers.map((signer) => (
+                  {signers.map((signer, index) => (
                     <div
                       key={signer.id}
                       className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${
@@ -675,16 +766,24 @@ export default function DocumentPrepare() {
                       }`}
                       onClick={() => setSelectedSigner(signer.id)}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: signer.color }} />
-                        <div>
-                          <p className="text-sm font-medium">{signer.name}</p>
-                          <p className="text-xs text-muted-foreground">{signer.email}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: signer.color }} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{index + 1}. {signer.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{signer.email}</p>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); removeSigner(signer.id); }}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Move up" onClick={(e) => { e.stopPropagation(); moveSigner(index, -1); }}>
+                          <ChevronUp className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Move down" onClick={(e) => { e.stopPropagation(); moveSigner(index, 1); }}>
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); removeSigner(signer.id); }}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   <div className="border-t border-border/50 pt-3 space-y-2">
@@ -730,8 +829,17 @@ export default function DocumentPrepare() {
                       })()}
                     </div>
                     <Input placeholder="Email" type="email" value={newSignerEmail} onChange={(e) => setNewSignerEmail(e.target.value)} />
-                    <Button onClick={addSigner} variant="outline" className="w-full gap-2" size="sm">
+                    <Button onClick={() => addSigner()} variant="outline" className="w-full gap-2" size="sm">
                       <Plus className="h-3 w-3" /> Add Signer
+                    </Button>
+                    <Button
+                      onClick={() => addSigner(accountDetails.fullName || user?.email || "Me", user?.email || "")}
+                      variant="ghost"
+                      className="w-full gap-2"
+                      size="sm"
+                      disabled={!user?.email}
+                    >
+                      <User className="h-3 w-3" /> Add me
                     </Button>
                   </div>
                 </CardContent>
@@ -747,18 +855,79 @@ export default function DocumentPrepare() {
                   )}
                 </CardHeader>
                 <CardContent>
+                  <div className="rounded-md border border-border/60 bg-secondary/30 p-2 mb-3 space-y-0.5">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Your details</p>
+                    <p className="text-xs">Name: {accountDetails.fullName || "Add your name in Settings"}</p>
+                    <p className="text-xs">Title: {accountDetails.title || "Add your title in Settings"}</p>
+                    <p className="text-xs">Date: {accountDetails.dateLabel}</p>
+                    <p className="text-[10px] text-muted-foreground">These fill Full Name, Title, Date, and Signature when you are the signer. Text wraps inside the field.</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                       <Button
                         key={type}
                         variant={pendingFieldType === type ? "default" : "outline"}
                         size="sm"
-                        className="gap-2"
-                        onClick={() => handleFieldTypeClick(type)}
+                        className="gap-2 cursor-grab active:cursor-grabbing"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("fieldType", type);
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        onClick={() => {
+                          if ((type === "full_name" || type === "title") && isAccountHolder(signers.find((s) => s.id === selectedSigner)?.email, accountDetails.email || user?.email)) {
+                            openTextDialog(type);
+                            return;
+                          }
+                          handleFieldTypeClick(type);
+                        }}
                       >
                         <Icon className="h-3 w-3" /> {label}
                       </Button>
                     ))}
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Check marks</p>
+                    <div className="flex flex-wrap gap-1">
+                      {CHECK_STYLES.map((style) => (
+                        <Button
+                          key={style.id}
+                          variant={checkStyle === style.id && pendingFieldType === "checkmark" ? "default" : "outline"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          title={style.label}
+                          onClick={() => { setCheckStyle(style.id); handleFieldTypeClick("checkmark"); }}
+                        >
+                          {style.glyph}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Company seals</p>
+                    <div className="flex gap-2">
+                      {COMPANY_SEALS.map((seal) => (
+                        <button
+                          key={seal.id}
+                          type="button"
+                          title={seal.legalName}
+                          className="rounded-full border border-border bg-card p-1 hover:ring-2 hover:ring-primary"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("fieldType", "seal");
+                            e.dataTransfer.setData("sealLabel", seal.stampLabel);
+                            e.dataTransfer.effectAllowed = "copy";
+                          }}
+                          onClick={() => {
+                            if (!selectedSigner) { toast.error("Select a signer first"); return; }
+                            setPendingSeal(seal.stampLabel);
+                            setPendingFieldType("seal");
+                          }}
+                        >
+                          <img src={companySealDataUrl(seal.id)} alt={`${seal.legalName} corporate seal`} className="h-12 w-12" />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {fields.length > 0 && (
                     <div className="mt-3 space-y-1">
@@ -768,7 +937,10 @@ export default function DocumentPrepare() {
                           <div key={f.id} className="flex items-center justify-between text-sm py-1">
                             <div className="flex items-center gap-2">
                               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: signer?.color }} />
-                              <span className="capitalize">{f.field_type}</span>
+                              <span className="capitalize">{f.field_type.replaceAll("_", " ")}</span>
+                              {f.value && !f.value.startsWith("data:") && (
+                                <span className="text-[10px] text-muted-foreground truncate max-w-[7rem]">{f.value}</span>
+                              )}
                               <Badge variant="outline" className="text-[10px] px-1 py-0">
                                 p{f.page_number}
                               </Badge>
@@ -781,6 +953,26 @@ export default function DocumentPrepare() {
                       })}
                     </div>
                   )}
+                  <div className="mt-4 space-y-2 border-t border-border/50 pt-3">
+                    <Label htmlFor="sign-message">Message to signers</Label>
+                    <Textarea
+                      id="sign-message"
+                      rows={3}
+                      placeholder="Optional note included in the signing email"
+                      value={signingMessage}
+                      onChange={(e) => setSigningMessage(e.target.value)}
+                    />
+                    <Label>Link expires</Label>
+                    <Select value={expiresInDays} onValueChange={setExpiresInDays}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No extra expiration</SelectItem>
+                        <SelectItem value="7">7 days</SelectItem>
+                        <SelectItem value="14">14 days</SelectItem>
+                        <SelectItem value="30">30 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </CardContent>
               </Card>
             </>
@@ -798,6 +990,7 @@ export default function DocumentPrepare() {
                 onPageClick={handlePageClick}
                 onPageDrop={handlePageDrop}
                 renderPageOverlay={renderPageOverlay}
+                nextTagLabel="Next page"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -812,14 +1005,18 @@ export default function DocumentPrepare() {
       <Dialog open={textDialogOpen} onOpenChange={setTextDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display">Enter Text</DialogTitle>
+            <DialogTitle className="font-display">
+              {textFieldKind === "full_name" ? "Full name" : textFieldKind === "title" ? "Title" : "Enter text"}
+            </DialogTitle>
           </DialogHeader>
-          <Input
-            placeholder="Type your text here..."
+          <Textarea
+            placeholder={textFieldKind === "text" ? "Type your text. It wraps inside the field." : "Prefilled from your account. Edit it if you need to."}
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleTextDialogConfirm()}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTextDialogConfirm(); } }}
+            rows={3}
             autoFocus
+            className="whitespace-pre-wrap break-words"
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setTextDialogOpen(false)}>Cancel</Button>

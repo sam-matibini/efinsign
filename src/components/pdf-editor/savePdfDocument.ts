@@ -1,12 +1,36 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { alignedLineX, defaultTextBoxHeight, DEFAULT_TEXT_BOX_WIDTH, wrapText } from "@/lib/textLayout";
-import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation } from "./types";
+import { PDFDocument, rgb, StandardFonts, degrees, type PDFPage } from "pdf-lib";
+import { wrapTextToWidth } from "@/lib/textWrap";
+import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
+import type { CheckStyle } from "@/lib/checkStyles";
+import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
   return rgb(r, g, b);
+}
+
+export function drawCheckOnPage(page: PDFPage, style: CheckStyle, x: number, y: number, size: number) {
+  const color = rgb(0.1, 0.45, 0.18);
+  const borderWidth = Math.max(1.2, size / (style === "bold" || style === "double" ? 7 : 10));
+  const scale = size / 24;
+  const mark = (dx = 0) => page.drawSvgPath("M 2 12 L 9 19 L 22 5", {
+    x: x + dx, y, borderColor: color, borderWidth, scale,
+  });
+  if (style === "cross") {
+    page.drawLine({ start: { x, y: y - size }, end: { x: x + size, y }, color, thickness: borderWidth });
+    page.drawLine({ start: { x, y }, end: { x: x + size, y: y - size }, color, thickness: borderWidth });
+    return;
+  }
+  if (style === "box") {
+    page.drawRectangle({ x, y: y - size, width: size, height: size, borderColor: color, borderWidth });
+  }
+  if (style === "circle") {
+    page.drawEllipse({ x: x + size / 2, y: y - size / 2, xScale: size / 2, yScale: size / 2, borderColor: color, borderWidth });
+  }
+  mark();
+  if (style === "double") mark(size * 0.55);
 }
 
 export async function savePdfDocument(
@@ -20,6 +44,16 @@ export async function savePdfDocument(
   const newDoc = await PDFDocument.create();
   const font = await newDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await newDoc.embedFont(StandardFonts.HelveticaBold);
+  const times = await newDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await newDoc.embedFont(StandardFonts.TimesRomanBold);
+  const courier = await newDoc.embedFont(StandardFonts.Courier);
+  const courierBold = await newDoc.embedFont(StandardFonts.CourierBold);
+
+  const pickFont = (family: EditorFont | undefined, bold: boolean | undefined) => {
+    if (family === "times") return bold ? timesBold : times;
+    if (family === "courier") return bold ? courierBold : courier;
+    return bold ? boldFont : font;
+  };
 
   const activePages = pages.filter((p) => !p.deleted);
   for (const ps of activePages) {
@@ -47,26 +81,49 @@ export async function savePdfDocument(
     switch (ann.type) {
       case "text": {
         const ta = ann as TextAnnotation;
-        const boxW = ta.width ?? DEFAULT_TEXT_BOX_WIDTH;
-        const boxH = ta.height ?? defaultTextBoxHeight(ta.fontSize);
-        const size = ta.fontSize * (pw / cw);
-        const maxWidth = Math.max(8, boxW * (pw / cw));
-        const lines = wrapText(ta.text, maxWidth, (s) => font.widthOfTextAtSize(s, size));
+        const size = ta.fontSize || 14;
+        const textFont = pickFont(ta.fontFamily, ta.bold);
+        const color = ta.color && /^#[0-9a-fA-F]{6}$/.test(ta.color) ? hexToRgb(ta.color) : rgb(0, 0, 0);
+        const maxW = ((ta.width && ta.width > 0 ? ta.width : 240) / cw) * pw;
+        const lines = wrapTextToWidth(ta.text, maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
         const lineHeight = size * 1.25;
-        const align = ta.align ?? "left";
-        const topBaseline = toPdfY(ta.y) - size * 0.9;
-        const minY = toPdfY(ta.y + boxH);
         lines.forEach((line, i) => {
-          const y = topBaseline - i * lineHeight;
-          if (y < minY - size * 0.2) return;
-          const lineWidth = font.widthOfTextAtSize(line, size);
-          const x = alignedLineX(toPdfX(ta.x), maxWidth, lineWidth, align);
-          page.drawText(line, { x, y, size, font, color: rgb(0, 0, 0) });
+          if (!line) return;
+          page.drawText(line, {
+            x: toPdfX(ta.x),
+            y: toPdfY(ta.y) - i * lineHeight,
+            size,
+            font: textFont,
+            color,
+            opacity: ta.opacity ?? 1,
+            ...(ta.rotate ? { rotate: degrees(ta.rotate) } : {}),
+          });
+        });
+        break;
+      }
+      case "whiteout": {
+        const wa = ann as WhiteoutAnnotation;
+        page.drawRectangle({
+          x: toPdfX(wa.x),
+          y: toPdfY(wa.y + wa.height),
+          width: (wa.width / cw) * pw,
+          height: (wa.height / ch) * ph,
+          color: rgb(1, 1, 1),
+          borderWidth: 0,
         });
         break;
       }
       case "stamp": {
         const sa = ann as StampAnnotation;
+        const seal = sealByStampLabel(sa.label);
+        if (seal) {
+          const png = await svgToPngBytes(companySealSvg(seal.id));
+          const image = await newDoc.embedPng(png);
+          const sw = ((sa.width || 150) / cw) * pw;
+          const sh = ((sa.height || 150) / ch) * ph;
+          page.drawImage(image, { x: toPdfX(sa.x), y: toPdfY(sa.y + (sa.height || 150)), width: sw, height: sh });
+          break;
+        }
         page.drawText(sa.label.toUpperCase(), {
           x: toPdfX(sa.x), y: toPdfY(sa.y), size: 36, font: boldFont,
           color: rgb(0.8, 0.1, 0.1), opacity: 0.4,
@@ -86,13 +143,7 @@ export async function savePdfDocument(
         const cx = toPdfX(ca.x);
         const cy = toPdfY(ca.y);
         const s = (ca.size / ch) * ph;
-        page.drawSvgPath("M 2 12 L 9 19 L 22 5", {
-          x: cx,
-          y: cy,
-          borderColor: rgb(0.13, 0.55, 0.13),
-          borderWidth: Math.max(1.5, s / 8),
-          scale: s / 24,
-        });
+        drawCheckOnPage(page, ca.style || "check", cx, cy, s);
         break;
       }
       case "highlight": {

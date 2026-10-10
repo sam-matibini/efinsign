@@ -10,10 +10,10 @@ export function AppLayout() {
   return (
     <OrganizationProvider>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="min-h-screen flex w-full bg-background text-foreground">
           <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <header className="h-14 flex items-center justify-between border-b border-border/50 px-4">
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="h-14 flex items-center justify-between border-b border-border bg-card px-4">
               <SidebarTrigger />
               <div className="flex items-center gap-3">
                 <SubscriptionBadge />

@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import SignatureCapture from "@/components/SignatureCapture";
 import { PenTool, FileSignature, Calendar, Type, CheckSquare, X, Save, Trash2, Plus, Star, User, Briefcase } from "lucide-react";
+import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
+import { COMPANY_SEALS, companySealDataUrl } from "@/lib/companySeals";
 
 const SELF_SIGN_FIELD_TYPES = [
   { type: "signature", label: "Signature", icon: PenTool },
@@ -42,6 +44,14 @@ interface FillSignSidebarProps {
   onDeleteSavedSig: (id: string) => void;
   // Text field callback
   onTextFieldRequest: () => void;
+  /** Opens the placement dialog for Full Name or Title, prefilled from the account. */
+  onIdentityField?: (type: "full_name" | "title") => void;
+  accountFullName?: string;
+  accountTitle?: string;
+  accountDate?: string;
+  checkStyle?: CheckStyle;
+  onCheckStyle?: (style: CheckStyle) => void;
+  onPlaceSeal?: (stampLabel: string) => void;
 }
 
 export default function FillSignSidebar({
@@ -62,6 +72,13 @@ export default function FillSignSidebar({
   onPersistInitials,
   onDeleteSavedSig,
   onTextFieldRequest,
+  onIdentityField,
+  accountFullName,
+  accountTitle,
+  accountDate,
+  checkStyle,
+  onCheckStyle,
+  onPlaceSeal,
 }: FillSignSidebarProps) {
   const [captureMode, setCaptureMode] = useState<"signature" | "initials" | null>(null);
   const [pickerMode, setPickerMode] = useState<"signature" | "initials" | null>(null);
@@ -84,7 +101,12 @@ export default function FillSignSidebar({
       }
       return;
     }
-    if (type === "text" || type === "full_name" || type === "title") {
+    if (type === "full_name" || type === "title") {
+      if (onIdentityField) onIdentityField(type);
+      else onTextFieldRequest();
+      return;
+    }
+    if (type === "text") {
       onTextFieldRequest();
       return;
     }
@@ -131,8 +153,17 @@ export default function FillSignSidebar({
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Field type toolbar */}
+          {(accountFullName || accountTitle || accountDate) && (
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-2 space-y-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Your details</p>
+              <p className="text-xs"><span className="text-muted-foreground">Name: </span>{accountFullName || "Set your name in Settings"}</p>
+              <p className="text-xs"><span className="text-muted-foreground">Title: </span>{accountTitle || "Set your title in Settings"}</p>
+              <p className="text-xs"><span className="text-muted-foreground">Date: </span>{accountDate}</p>
+              <p className="text-[10px] text-muted-foreground">Full Name, Title, Date, and Signature use these when you place them.</p>
+            </div>
+          )}
           <div>
-            <p className="text-xs text-muted-foreground mb-2">Drag onto the PDF or click to place</p>
+            <p className="text-xs text-muted-foreground mb-2">Drag onto the PDF or click to place. Text wraps inside the field.</p>
             <div className="grid grid-cols-2 gap-2">
               {SELF_SIGN_FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                 <Button
@@ -152,6 +183,51 @@ export default function FillSignSidebar({
               ))}
             </div>
           </div>
+
+          {onCheckStyle && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Check marks</p>
+              <div className="flex flex-wrap gap-1">
+                {CHECK_STYLES.map((style) => (
+                  <Button
+                    key={style.id}
+                    variant={checkStyle === style.id ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    title={style.label}
+                    onClick={() => { onCheckStyle(style.id); onFieldTypeClick("checkmark"); }}
+                  >
+                    {style.glyph}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {onPlaceSeal && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Company seals</p>
+              <div className="flex gap-2">
+                {COMPANY_SEALS.map((seal) => (
+                  <button
+                    key={seal.id}
+                    type="button"
+                    title={seal.legalName}
+                    className="rounded-full border border-border bg-card p-1 hover:ring-2 hover:ring-primary"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("fieldType", "seal");
+                      e.dataTransfer.setData("sealLabel", seal.stampLabel);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onClick={() => onPlaceSeal(seal.stampLabel)}
+                  >
+                    <img src={companySealDataUrl(seal.id)} alt={`${seal.legalName} corporate seal`} className="h-12 w-12" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Signature management */}
           <div className="border-t border-border/50 pt-3 space-y-3">

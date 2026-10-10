@@ -1,5 +1,8 @@
 import { useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
+import { fontSizeForFieldHeight, isTextLikeField } from "@/lib/fieldFont";
+import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
+import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
 
 interface DraggableFieldProps {
   id: string;
@@ -14,6 +17,7 @@ interface DraggableFieldProps {
   onMove: (id: string, x: number, y: number) => void;
   onResize?: (id: string, width: number, height: number, x?: number, y?: number) => void;
   onDelete?: (id: string) => void;
+  onAdjustFont?: (id: string, direction: 1 | -1) => void;
 }
 
 const MIN_W = 40;
@@ -29,7 +33,7 @@ const CURSORS: Record<Corner, string> = {
   sw: "nesw-resize",
 };
 
-export default function DraggableField({ id, x, y, width, height, color, label, value, fieldType, onMove, onResize, onDelete }: DraggableFieldProps) {
+export default function DraggableField({ id, x, y, width, height, color, label, value, fieldType, onMove, onResize, onDelete, onAdjustFont }: DraggableFieldProps) {
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
   const offsetRef = useRef({ x: 0, y: 0 });
@@ -135,10 +139,13 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
   };
 
   const corners: Corner[] = ["nw", "ne", "sw", "se"];
+  const textSize = fontSizeForFieldHeight(height);
+  const seal = fieldType === "seal" ? sealByStampLabel(value) : null;
+  const check = fieldType === "checkmark" || fieldType === "checkbox" ? checkAppearance(value) : null;
 
   return (
     <div
-      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-80 cursor-move"}`}
+      className={`absolute border-2 rounded flex items-center justify-center text-xs font-medium select-none overflow-hidden ${dragging ? "opacity-90 shadow-lg z-50" : "opacity-80 cursor-move"}`}
       style={{
         left: x,
         top: y,
@@ -152,12 +159,23 @@ export default function DraggableField({ id, x, y, width, height, color, label, 
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {(fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image") ? (
-        <img src={value} alt={fieldType} className="w-full h-full object-contain pointer-events-none" draggable={false} />
-      ) : value ? (
-        <span className="truncate px-1">{value}</span>
+      {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal") && (value?.startsWith("data:image") || seal) ? (
+        <img src={seal ? companySealDataUrl(seal.id) : value!} alt={fieldType} className="w-full h-full object-contain pointer-events-none" draggable={false} />
+      ) : check?.filled ? (
+        <span className="font-bold text-green-700 leading-none" style={{ fontSize: textSize }}>{checkGlyph(check.style)}</span>
+      ) : isTextLikeField(fieldType) && value ? (
+        <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left" style={{ fontSize: textSize }}>{value}</span>
+      ) : value && !value.startsWith("style:") ? (
+        <span className="px-1 w-full h-full overflow-hidden whitespace-pre-wrap break-words leading-tight text-left" style={{ fontSize: textSize }}>{value}</span>
       ) : (
         label
+      )}
+      {(hovered || dragging) && onAdjustFont && isTextLikeField(fieldType) && (
+        <div className="absolute -bottom-7 left-0 flex gap-1 z-20" onMouseDown={(e) => e.stopPropagation()}>
+          <button type="button" className="h-6 px-1.5 rounded bg-card border text-[11px]" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, -1); }}>A−</button>
+          <span className="h-6 px-1 rounded bg-card border text-[10px] flex items-center">{textSize}</span>
+          <button type="button" className="h-6 px-1.5 rounded bg-card border text-xs font-semibold" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdjustFont(id, 1); }}>A+</button>
+        </div>
       )}
       {(hovered || dragging) && onDelete && (
         <button

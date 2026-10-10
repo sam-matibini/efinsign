@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Shield, Users, Mail, Clock, X, Pencil, Check, Star, PenTool, User, Send, Key, Copy } from "lucide-react";
+import { readAccountTitle, writeAccountTitle } from "@/lib/accountProfile";
 import SignatureCapture from "@/components/SignatureCapture";
 import { SubscriptionCard } from "@/components/SubscriptionCard";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,6 +65,20 @@ interface ApiKey {
   revoked_at: string | null;
 }
 
+async function invokeError(error: unknown): Promise<string> {
+  const err = error as { message?: string; context?: { clone?: () => { json: () => Promise<unknown> }; json?: () => Promise<unknown> } };
+  try {
+    const response = err.context?.clone?.() ?? err.context;
+    const body = await response?.json?.() as { error?: { message?: string } | string; message?: string } | undefined;
+    const nested = body?.error;
+    const message = typeof nested === "string" ? nested : nested?.message || body?.message;
+    if (message && message.trim()) return message;
+  } catch {
+    /* Keep the client message when the function body is not JSON. */
+  }
+  return err.message || "Request failed";
+}
+
 const AVAILABLE_SCOPES = [
   { value: "documents:read", label: "Read documents" },
   { value: "documents:write", label: "Create & modify documents" },
@@ -79,6 +94,7 @@ export default function OrgSettings() {
   const { currentOrg, role } = useOrganization();
   const { user } = useAuth();
   const [fullName, setFullName] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [orgAddress, setOrgAddress] = useState("");
@@ -149,13 +165,21 @@ export default function OrgSettings() {
     if (!user) return;
     supabase.from("profiles").select("full_name").eq("user_id", user.id).single()
       .then(({ data }) => { if (data?.full_name) setFullName(data.full_name); });
+    setJobTitle(readAccountTitle(user.id, (user.user_metadata as { job_title?: string } | undefined)?.job_title));
   }, [user]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
     setSavingProfile(true);
     const { error } = await supabase.from("profiles").update({ full_name: fullName }).eq("user_id", user.id);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      setSavingProfile(false);
+      return;
+    }
+    writeAccountTitle(user.id, jobTitle.trim());
+    const { error: metaError } = await supabase.auth.updateUser({ data: { job_title: jobTitle.trim() } });
+    if (metaError) toast.success("Profile saved on this device. Title could not sync to your account yet.");
     else toast.success("Profile updated");
     setSavingProfile(false);
   };
@@ -436,11 +460,15 @@ export default function OrgSettings() {
     if (!currentOrg) return;
     setLoadingKeys(true);
     try {
-      const { data, error } = await supabase.functions.invoke("api-keys-list", { body: {} });
+      const { data, error } = await supabase
+        .from("api_keys")
+        .select("id, name, key_prefix, mode, scopes, last_used_at, usage_count, usage_limit, created_at, revoked_at")
+        .eq("organization_id", currentOrg.id)
+        .order("created_at", { ascending: false });
       if (error) {
-        toast.error(error.message || "Failed to load API keys");
-      } else if (data?.data) {
-        setApiKeys(data.data as ApiKey[]);
+        toast.error(error.message || "Could not load API keys");
+      } else {
+        setApiKeys((data || []) as ApiKey[]);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to load API keys");
@@ -453,10 +481,10 @@ export default function OrgSettings() {
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke("api-keys-generate", {
-        body: { name: keyName.trim(), scopes: selectedScopes },
+        body: { name: keyName.trim(), scopes: selectedScopes, organization_id: currentOrg?.id },
       });
       if (error) {
-        toast.error(error.message || "Failed to generate key");
+        toast.error(await invokeError(error));
       } else if (data?.data?.key) {
         setGeneratedKey(data.data.key);
         setKeyName("");
@@ -485,10 +513,10 @@ export default function OrgSettings() {
     setRevoking(true);
     try {
       const { data, error } = await supabase.functions.invoke("api-keys-revoke", {
-        body: { key_id: revokeId },
+        body: { key_id: revokeId, organization_id: currentOrg?.id },
       });
       if (error) {
-        toast.error(error.message || "Failed to revoke key");
+        toast.error(await invokeError(error));
       } else {
         toast.success("API key revoked");
         fetchApiKeys();
@@ -532,6 +560,11 @@ export default function OrgSettings() {
           <div className="space-y-2">
             <Label>Full Name</Label>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Title</Label>
+            <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Partner" />
+            <p className="text-xs text-muted-foreground">Used to prefill Title fields when you fill and sign.</p>
           </div>
           <Button onClick={handleSaveProfile} disabled={savingProfile}>
             {savingProfile ? "Saving..." : "Save Profile"}

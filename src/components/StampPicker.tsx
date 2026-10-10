@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Stamp } from "lucide-react";
+import { COMPANY_SEALS, companySealDataUrl, type CompanySealId } from "@/lib/companySeals";
 
 const STAMPS = [
   { label: "Approved", color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
@@ -35,6 +36,21 @@ export default function StampPicker({ onSelect, selected }: StampPickerProps) {
           </Button>
         ))}
       </div>
+      <p className="text-xs font-medium text-muted-foreground pt-1">Company seals</p>
+      <div className="flex flex-wrap gap-2">
+        {COMPANY_SEALS.map((seal) => (
+          <button
+            key={seal.id}
+            type="button"
+            title={`${seal.legalName} corporate seal`}
+            className={`rounded-full border bg-card p-1 ${selected === seal.stampLabel ? "ring-2 ring-primary" : "border-border"}`}
+            onClick={() => onSelect(seal.stampLabel)}
+          >
+            <img src={companySealDataUrl(seal.id as CompanySealId)} alt={`${seal.legalName} corporate seal`} className="h-14 w-14" />
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground leading-tight">Applied with this document’s signing record by an authorized signatory.</p>
     </div>
   );
 }

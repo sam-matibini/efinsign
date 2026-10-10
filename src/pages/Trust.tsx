@@ -7,7 +7,7 @@ export default function Trust() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/landing" className="font-semibold text-lg" style={{ color: "#003D8F" }}>
+          <Link to="/landing" className="font-semibold text-lg text-foreground">
             eFinSign
           </Link>
           <nav className="flex gap-4 text-sm">
@@ -23,7 +23,7 @@ export default function Trust() {
             <Shield className="h-3 w-3" />
             Trust & Security
           </div>
-          <h1 className="text-4xl font-bold mb-3" style={{ color: "#003D8F" }}>
+          <h1 className="text-4xl font-bold mb-3 text-foreground">
             Security, Privacy & Trust
           </h1>
           <p className="text-muted-foreground">
@@ -38,7 +38,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Lock className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <Lock className="h-5 w-5 text-foreground" />
                 Access & Authentication
               </CardTitle>
             </CardHeader>
@@ -52,7 +52,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Database className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <Database className="h-5 w-5 text-foreground" />
                 Data Isolation
               </CardTitle>
             </CardHeader>
@@ -65,7 +65,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <FileCheck className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <FileCheck className="h-5 w-5 text-foreground" />
                 Document Signing Integrity
               </CardTitle>
             </CardHeader>
@@ -78,7 +78,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <Users className="h-5 w-5 text-foreground" />
                 Subprocessors
               </CardTitle>
             </CardHeader>
@@ -96,7 +96,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Shield className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <Shield className="h-5 w-5 text-foreground" />
                 Retention & Deletion
               </CardTitle>
             </CardHeader>
@@ -109,7 +109,7 @@ export default function Trust() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Mail className="h-5 w-5" style={{ color: "#003D8F" }} />
+                <Mail className="h-5 w-5 text-foreground" />
                 Reporting a Security Issue
               </CardTitle>
             </CardHeader>

@@ -4,13 +4,13 @@ import type { AdminMetrics } from "./types";
 
 export function MetricsCards({ metrics }: { metrics: AdminMetrics }) {
   const cards = [
-    { label: "Organizations", value: metrics.total_organizations, icon: Building2, color: "text-blue-500" },
-    { label: "Total Users", value: metrics.total_users, icon: Users, color: "text-emerald-500" },
-    { label: "Total Documents", value: metrics.total_documents, icon: FileText, color: "text-orange-500" },
-    { label: "Documents This Month", value: metrics.documents_this_month, icon: CalendarDays, color: "text-violet-500" },
-    { label: "Completed", value: metrics.documents_completed, icon: CheckCircle2, color: "text-teal-500" },
-    { label: "Pending", value: metrics.documents_pending, icon: Clock, color: "text-amber-500" },
-    { label: "Total Signatures", value: metrics.total_signatures, icon: PenTool, color: "text-rose-500" },
+    { label: "Organizations", value: metrics.total_organizations, icon: Building2, color: "text-primary" },
+    { label: "Total Users", value: metrics.total_users, icon: Users, color: "text-primary" },
+    { label: "Total Documents", value: metrics.total_documents, icon: FileText, color: "text-primary" },
+    { label: "Documents This Month", value: metrics.documents_this_month, icon: CalendarDays, color: "text-primary" },
+    { label: "Completed", value: metrics.documents_completed, icon: CheckCircle2, color: "text-success" },
+    { label: "Pending", value: metrics.documents_pending, icon: Clock, color: "text-warning" },
+    { label: "Total Signatures", value: metrics.total_signatures, icon: PenTool, color: "text-primary" },
   ];
 
   return (

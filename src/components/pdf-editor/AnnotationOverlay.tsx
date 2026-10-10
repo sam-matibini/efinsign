@@ -1,34 +1,41 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { clampRect, defaultTextBoxHeight, DEFAULT_TEXT_BOX_WIDTH, snapRect, type Rect } from "@/lib/textLayout";
-import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation } from "./types";
-import { MIN_SIZE, renderResizeHandles, type ResizeDir } from "./resizeHandles";
+import { clampRect, snapRect } from "@/lib/textLayout";
+import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
+import { checkGlyph } from "@/lib/checkStyles";
+import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
+import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
-function hasSize(ann: Annotation): ann is HighlightAnnotation | ShapeAnnotation | ImageAnnotation | TextAnnotation {
-  return ann.type === "highlight" || ann.type === "shape" || ann.type === "image" || ann.type === "text";
+type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
+
+const HANDLE_SIZE = 8;
+const MIN_SIZE = 20;
+
+const CURSOR_MAP: Record<ResizeDir, string> = {
+  nw: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize", se: "nwse-resize",
+  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
+};
+
+function textBox(ann: TextAnnotation) {
+  const width = ann.width && ann.width > 0 ? ann.width : DEFAULT_TEXT_BOX_WIDTH;
+  const height = ann.height && ann.height > 0 ? ann.height : estimateWrappedHeight(ann.text, ann.fontSize, width);
+  return { width, height };
 }
 
-export function annotationBox(ann: Annotation): Rect | null {
-  if (ann.type === "drawing") return null;
-  if (ann.type === "text") {
-    return {
-      x: ann.x,
-      y: ann.y,
-      w: ann.width ?? DEFAULT_TEXT_BOX_WIDTH,
-      h: ann.height ?? defaultTextBoxHeight(ann.fontSize),
-    };
-  }
-  if (ann.type === "highlight" || ann.type === "shape" || ann.type === "image") {
-    return { x: ann.x, y: ann.y, w: ann.width, h: ann.height };
-  }
-  if (ann.type === "checkmark") {
-    return { x: ann.x, y: ann.y, w: ann.size, h: ann.size };
-  }
-  if (ann.type === "stamp") {
-    return { x: ann.x, y: ann.y, w: 120, h: 40 };
+function boxSize(ann: Annotation): { width: number; height: number } | null {
+  if (ann.type === "text") return textBox(ann);
+  if (ann.type === "stamp" && ann.width && ann.height) return { width: ann.width, height: ann.height };
+  if (ann.type === "highlight" || ann.type === "shape" || ann.type === "image" || ann.type === "whiteout") {
+    return { width: ann.width, height: ann.height };
   }
   return null;
+}
+
+function editorFontFamily(family: EditorFont | undefined) {
+  if (family === "times") return "Times New Roman, Times, serif";
+  if (family === "courier") return "Courier New, Courier, monospace";
+  return "Helvetica, Arial, sans-serif";
 }
 
 interface AnnotationOverlayProps {
@@ -36,7 +43,6 @@ interface AnnotationOverlayProps {
   pageIndex: number;
   tool: ToolMode;
   selectedId: string | null;
-  hiddenId?: string | null;
   onSelect: (id: string | null) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Annotation>) => void;
@@ -44,108 +50,126 @@ interface AnnotationOverlayProps {
 }
 
 export default function AnnotationOverlay({
-  annotations, pageIndex, tool, selectedId, hiddenId, onSelect, onDelete, onUpdate, onEditText,
+  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText,
 }: AnnotationOverlayProps) {
   const pageRef = useRef<HTMLDivElement>(null);
-  const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing" && a.id !== hiddenId);
-  const isSelectMode = tool === "select" || tool === "text";
+  const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing");
+  const isSelectMode = tool === "select";
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; w: number; h: number } | null>(null);
+  const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const resizeRef = useRef<{
     id: string; dir: ResizeDir; startX: number; startY: number;
     origX: number; origY: number; origW: number; origH: number;
   } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
-  const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
-
-  const pageSize = () => {
-    const el = pageRef.current;
-    return { w: el?.clientWidth || 0, h: el?.clientHeight || 0 };
-  };
-
-  const othersFor = (id: string): Rect[] =>
-    pageAnnotations.filter((a) => a.id !== id).map(annotationBox).filter((r): r is Rect => r !== null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, ann: Annotation) => {
     if (!isSelectMode) return;
     e.stopPropagation();
     onSelect(ann.id);
-    const box = annotationBox(ann);
-    if (!box) return;
-    dragRef.current = { id: ann.id, startX: e.clientX, startY: e.clientY, origX: box.x, origY: box.y, w: box.w, h: box.h };
-    setDragging(true);
+    if ("x" in ann && "y" in ann) {
+      const box = boxSize(ann);
+      dragRef.current = {
+        id: ann.id, startX: e.clientX, startY: e.clientY, origX: ann.x, origY: ann.y,
+        w: box?.width ?? 40, h: box?.height ?? 24,
+      };
+      setDragging(true);
+    }
   }, [isSelectMode, onSelect]);
 
   const handleResizeDown = useCallback((e: React.MouseEvent, ann: Annotation, dir: ResizeDir) => {
-    if (!isSelectMode || !hasSize(ann)) return;
+    const box = boxSize(ann);
+    if (!isSelectMode || !box || !("x" in ann)) return;
     e.stopPropagation();
     e.preventDefault();
-    const box = annotationBox(ann)!;
     resizeRef.current = {
       id: ann.id, dir, startX: e.clientX, startY: e.clientY,
-      origX: box.x, origY: box.y, origW: box.w, origH: box.h,
+      origX: ann.x, origY: ann.y, origW: box.width, origH: box.height,
     };
     setResizing(true);
   }, [isSelectMode]);
 
-  useEffect(() => {
-    if (!dragging && !resizing) return;
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (resizing && resizeRef.current) {
+      const r = resizeRef.current;
+      const dx = e.clientX - r.startX;
+      const dy = e.clientY - r.startY;
+      let { origX: x, origY: y, origW: w, origH: h } = r;
 
-    const move = (e: MouseEvent) => {
-      const { w: pageW, h: pageH } = pageSize();
-      if (resizing && resizeRef.current) {
-        const r = resizeRef.current;
-        const dx = e.clientX - r.startX;
-        const dy = e.clientY - r.startY;
-        let x = r.origX, y = r.origY, w = r.origW, h = r.origH;
-        if (r.dir.includes("e")) w = Math.max(MIN_SIZE, w + dx);
-        if (r.dir.includes("w")) { w = Math.max(MIN_SIZE, w - dx); x = r.origX + (r.origW - w); }
-        if (r.dir.includes("s")) h = Math.max(MIN_SIZE, h + dy);
-        if (r.dir.includes("n")) { h = Math.max(MIN_SIZE, h - dy); y = r.origY + (r.origH - h); }
-        const clamped = clampRect({ x, y, w, h }, pageW, pageH);
-        onUpdate(r.id, { x: clamped.x, y: clamped.y, width: clamped.w, height: clamped.h } as Partial<Annotation>);
-        return;
-      }
-      if (dragging && dragRef.current) {
-        const d = dragRef.current;
-        const dx = e.clientX - d.startX;
-        const dy = e.clientY - d.startY;
-        const snapped = snapRect(
-          { x: d.origX + dx, y: d.origY + dy, w: d.w, h: d.h },
-          othersFor(d.id),
-          pageW,
-          pageH,
-        );
-        const clamped = clampRect({ x: snapped.x, y: snapped.y, w: d.w, h: d.h }, pageW, pageH);
-        setGuides({ v: snapped.guideV, h: snapped.guideH });
-        onUpdate(d.id, { x: clamped.x, y: clamped.y } as Partial<Annotation>);
-      }
-    };
+      if (r.dir.includes("e")) w = Math.max(MIN_SIZE, w + dx);
+      if (r.dir.includes("w")) { w = Math.max(MIN_SIZE, w - dx); x = r.origX + (r.origW - w); }
+      if (r.dir.includes("s")) h = Math.max(MIN_SIZE, h + dy);
+      if (r.dir.includes("n")) { h = Math.max(MIN_SIZE, h - dy); y = r.origY + (r.origH - h); }
 
-    const up = () => {
-      dragRef.current = null;
-      resizeRef.current = null;
-      setDragging(false);
-      setResizing(false);
-      setGuides({ v: null, h: null });
-    };
+      onUpdate(r.id, { x, y, width: w, height: h } as any);
+      return;
+    }
+    if (dragging && dragRef.current) {
+      const d = dragRef.current;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      const pageW = pageRef.current?.clientWidth || 0;
+      const pageH = pageRef.current?.clientHeight || 0;
+      const others = pageAnnotations
+        .filter((a) => a.id !== d.id && a.type !== "drawing")
+        .flatMap((a) => {
+          if (!("x" in a) || !("y" in a)) return [];
+          const box = boxSize(a);
+          return [{ x: a.x, y: a.y, w: box?.width ?? 40, h: box?.height ?? 24 }];
+        });
+      const snapped = snapRect({ x: d.origX + dx, y: d.origY + dy, w: d.w, h: d.h }, others, pageW, pageH);
+      const clamped = clampRect({ x: snapped.x, y: snapped.y, w: d.w, h: d.h }, pageW || 4000, pageH || 4000);
+      setGuides({ v: snapped.guideV, h: snapped.guideH });
+      onUpdate(d.id, { x: clamped.x, y: clamped.y } as any);
+    }
+  }, [dragging, resizing, onUpdate]);
 
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    return () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-    };
-    // othersFor is derived from pageAnnotations
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragging, resizing, onUpdate, pageAnnotations]);
+  const handleMouseUp = useCallback(() => {
+    dragRef.current = null;
+    resizeRef.current = null;
+    setDragging(false);
+    setResizing(false);
+    setGuides({ v: null, h: null });
+  }, []);
+
+  const renderResizeHandles = (ann: Annotation) => {
+    const box = boxSize(ann);
+    if (!box) return null;
+    const { width: w, height: h } = box;
+    const half = HANDLE_SIZE / 2;
+    const positions: { dir: ResizeDir; left: number; top: number }[] = [
+      { dir: "nw", left: -half, top: -half },
+      { dir: "ne", left: w - half, top: -half },
+      { dir: "sw", left: -half, top: h - half },
+      { dir: "se", left: w - half, top: h - half },
+      { dir: "n", left: w / 2 - half, top: -half },
+      { dir: "s", left: w / 2 - half, top: h - half },
+      { dir: "w", left: -half, top: h / 2 - half },
+      { dir: "e", left: w - half, top: h / 2 - half },
+    ];
+    return positions.map(({ dir, left, top }) => (
+      <div
+        key={dir}
+        className="absolute bg-primary border border-primary-foreground z-30"
+        style={{
+          left, top, width: HANDLE_SIZE, height: HANDLE_SIZE,
+          cursor: CURSOR_MAP[dir], pointerEvents: "auto",
+        }}
+        onMouseDown={(e) => handleResizeDown(e, ann, dir)}
+      />
+    ));
+  };
 
   return (
     <div
       ref={pageRef}
-      className="absolute inset-0 z-[15]"
-      style={{ pointerEvents: tool === "select" ? "auto" : "none" }}
-      onClick={(e) => { if (tool === "select") { e.stopPropagation(); onSelect(null); } }}
+      className="absolute inset-0"
+      style={{ pointerEvents: isSelectMode ? "auto" : "none" }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onClick={(e) => { if (isSelectMode) { e.stopPropagation(); onSelect(null); } }}
     >
       {guides.v !== null && (
         <div className="absolute top-0 bottom-0 w-px bg-primary z-40 pointer-events-none" style={{ left: guides.v }} />
@@ -155,16 +179,16 @@ export default function AnnotationOverlay({
       )}
       {pageAnnotations.map((ann) => {
         const isSelected = selectedId === ann.id;
-        const box = annotationBox(ann);
+        const box = boxSize(ann);
         const common = {
           position: "absolute" as const,
-          left: box?.x ?? 0,
-          top: box?.y ?? 0,
-          width: hasSize(ann) ? box?.w : undefined,
-          height: hasSize(ann) ? box?.h : undefined,
+          left: "x" in ann ? ann.x : 0,
+          top: "y" in ann ? ann.y : 0,
+          width: box?.width,
+          height: box?.height,
           pointerEvents: isSelectMode ? "auto" as const : "none" as const,
           cursor: isSelectMode ? "move" : "default",
-          outline: isSelected ? "2px dashed hsl(var(--primary))" : ann.type === "text" ? "1px dashed hsl(var(--border))" : "none",
+          outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
           outlineOffset: 2,
         };
 
@@ -175,10 +199,13 @@ export default function AnnotationOverlay({
             onMouseDown={(e) => handleMouseDown(e, ann)}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => {
-              e.stopPropagation();
-              if (ann.type === "text") onEditText?.(ann);
+              if (ann.type === "text" && onEditText) {
+                e.stopPropagation();
+                onEditText(ann);
+              }
             }}
           >
+            {/* Delete toolbar */}
             {isSelected && (
               <div className="absolute -top-8 left-0 flex gap-1 z-20">
                 <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}>
@@ -190,27 +217,56 @@ export default function AnnotationOverlay({
               </div>
             )}
 
-            {isSelected && box && renderResizeHandles(box.w, box.h, (e, dir) => handleResizeDown(e, ann, dir))}
+            {/* Resize handles */}
+            {isSelected && renderResizeHandles(ann)}
 
+            {/* Render by type */}
             {ann.type === "text" && (
               <div
-                className="text-foreground select-none whitespace-pre-wrap break-words overflow-hidden h-full w-full px-0.5"
+                className="select-none overflow-hidden"
                 style={{
+                  width: "100%",
+                  height: "100%",
                   fontSize: (ann as TextAnnotation).fontSize,
-                  lineHeight: 1.25,
-                  textAlign: (ann as TextAnnotation).align ?? "left",
+                  color: (ann as TextAnnotation).color || "#111827",
+                  fontWeight: (ann as TextAnnotation).bold ? 700 : 400,
+                  fontFamily: editorFontFamily((ann as TextAnnotation).fontFamily),
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  lineHeight: 1.35,
+                  opacity: (ann as TextAnnotation).opacity ?? 1,
+                  transform: (ann as TextAnnotation).rotate ? `rotate(${(ann as TextAnnotation).rotate}deg)` : undefined,
+                  transformOrigin: "left top",
                 }}
               >
                 {(ann as TextAnnotation).text}
               </div>
             )}
+            {ann.type === "whiteout" && (
+              <div
+                className="bg-white border border-dashed border-slate-300"
+                style={{ width: (ann as WhiteoutAnnotation).width, height: (ann as WhiteoutAnnotation).height }}
+              />
+            )}
             {ann.type === "stamp" && (
-              <span className="font-bold text-3xl text-destructive/40 uppercase select-none" style={{ transform: "rotate(-30deg)", display: "inline-block" }}>
-                {(ann as StampAnnotation).label}
-              </span>
+              sealByStampLabel((ann as StampAnnotation).label) ? (
+                <img
+                  src={companySealDataUrl(sealByStampLabel((ann as StampAnnotation).label)!.id)}
+                  alt={sealByStampLabel((ann as StampAnnotation).label)!.legalName}
+                  draggable={false}
+                  className="select-none"
+                  style={{ width: (ann as StampAnnotation).width || 150, height: (ann as StampAnnotation).height || 150 }}
+                />
+              ) : (
+                <span className="font-bold text-3xl text-destructive/40 uppercase select-none" style={{ transform: "rotate(-30deg)", display: "inline-block" }}>
+                  {(ann as StampAnnotation).label}
+                </span>
+              )
             )}
             {ann.type === "checkmark" && (
-              <span style={{ fontSize: (ann as CheckmarkAnnotation).size }} className="text-green-600 font-bold select-none">✓</span>
+              <span style={{ fontSize: (ann as CheckmarkAnnotation).size }} className="text-green-700 font-bold select-none leading-none">
+                {checkGlyph((ann as CheckmarkAnnotation).style || "check")}
+              </span>
             )}
             {ann.type === "highlight" && (
               <div

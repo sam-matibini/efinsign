@@ -248,7 +248,7 @@ export function DocumentsTab() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Completion Rate</CardTitle>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  <CheckCircle2 className="h-5 w-5 text-success" />
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{analytics.completion_rate}%</p>
@@ -258,7 +258,7 @@ export function DocumentsTab() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Avg Signers / Doc</CardTitle>
-                  <Users className="h-5 w-5 text-blue-500" />
+                  <Users className="h-5 w-5 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{analytics.avg_signers}</p>

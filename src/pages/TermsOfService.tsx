@@ -16,7 +16,7 @@ export default function TermsOfService() {
 
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/landing" className="font-semibold text-lg" style={{ color: "#003D8F" }}>
+          <Link to="/landing" className="font-semibold text-lg text-foreground">
             eFinSign
           </Link>
           <nav className="flex gap-4 text-sm">
@@ -33,7 +33,7 @@ export default function TermsOfService() {
             <Scale className="h-3 w-3" />
             Legal
           </div>
-          <h1 className="text-4xl font-bold mb-3" style={{ color: "#003D8F" }}>
+          <h1 className="text-4xl font-bold mb-3 text-foreground">
             Terms of Service
           </h1>
           <p className="text-sm text-muted-foreground">Last updated: {LAST_UPDATED}</p>

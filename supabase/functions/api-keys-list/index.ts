@@ -2,27 +2,23 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, corsPreflight } from "../_shared/cors.ts";
 import { validateSupabaseJwt } from "../_shared/auth.ts";
 import { errorResponse, handleError } from "../_shared/errors.ts";
+import { isResponse, memberOrganization } from "../_shared/memberOrg.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return corsPreflight();
 
   try {
     const userId = await validateSupabaseJwt(req);
+    const body = req.method === "GET" ? {} : await req.json().catch(() => ({}));
+    const organizationId = typeof body?.organization_id === "string" ? body.organization_id : null;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: member } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", userId)
-      .single();
-
-    if (!member) {
-      return errorResponse(400, "no_organization", "User is not a member of any organization");
-    }
+    const member = await memberOrganization(supabase, userId, organizationId);
+    if (isResponse(member)) return member;
 
     const { data: keys, error } = await supabase
       .from("api_keys")

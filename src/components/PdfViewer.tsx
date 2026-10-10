@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import PageDemarcator from "@/components/PageDemarcator";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -8,8 +9,11 @@ interface PdfViewerProps {
   className?: string;
   placementMode?: boolean;
   onPageClick?: (pageNumber: number, x: number, y: number) => void;
-  onPageDrop?: (pageNumber: number, x: number, y: number, fieldType: string) => void;
+  onPageDrop?: (pageNumber: number, x: number, y: number, fieldType: string, sealLabel?: string) => void;
   renderPageOverlay?: (pageNumber: number) => React.ReactNode;
+  /** When set, each page boundary can show a Next tag for the following action. */
+  onNextFromPage?: (pageNumber: number) => void;
+  nextTagLabel?: string;
 }
 
 export default function PdfViewer({
@@ -19,6 +23,8 @@ export default function PdfViewer({
   onPageClick,
   onPageDrop,
   renderPageOverlay,
+  onNextFromPage,
+  nextTagLabel,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -102,7 +108,7 @@ export default function PdfViewer({
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      onPageDrop(pageNumber, Math.round(x), Math.round(y), fieldType);
+      onPageDrop(pageNumber, Math.round(x), Math.round(y), fieldType, e.dataTransfer.getData("sealLabel") || undefined);
     },
     [onPageDrop]
   );
@@ -117,9 +123,10 @@ export default function PdfViewer({
 
   return (
     <div className={`overflow-auto ${className}`} style={placementMode ? { cursor: "crosshair" } : undefined}>
+      <div className="flex flex-col items-center">
       {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
+        <div key={pageNum} className="flex flex-col items-center">
         <div
-          key={pageNum}
           className="relative inline-block"
           data-page={pageNum}
           onClick={(e) => handlePageClick(pageNum, e)}
@@ -135,7 +142,18 @@ export default function PdfViewer({
           />
           {renderPageOverlay?.(pageNum)}
         </div>
+        <PageDemarcator
+          page={pageNum}
+          total={pageCount}
+          nextLabel={nextTagLabel}
+          onNext={pageNum < pageCount ? () => {
+            if (onNextFromPage) onNextFromPage(pageNum);
+            else document.querySelector(`[data-page="${pageNum + 1}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          } : undefined}
+        />
+        </div>
       ))}
+      </div>
     </div>
   );
 }

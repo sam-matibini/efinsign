@@ -15,6 +15,7 @@ import DocumentPrepare from "./pages/DocumentPrepare";
 import PdfEdit from "./pages/PdfEdit";
 import PdfEditorLanding from "./pages/PdfEditorLanding";
 import DocumentDetail from "./pages/DocumentDetail";
+import Documents from "./pages/Documents";
 import Templates from "./pages/Templates";
 import SettingsPage from "./pages/SettingsPage";
 import ClientsPage from "./pages/ClientsPage";
@@ -31,7 +32,6 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
 import NotFound from "./pages/NotFound";
-import PdfTextToolPlayground from "./pages/PdfTextToolPlayground";
 
 const queryClient = new QueryClient();
 
@@ -71,12 +71,11 @@ const App = () => (
               <Route path="/cookies" element={<CookiePolicy />} />
               <Route path="/sign" element={<Sign />} />
               <Route path="/embed/sign" element={<EmbedSign />} />
-              {import.meta.env.DEV && <Route path="/dev/pdf-text-tool" element={<PdfTextToolPlayground />} />}
               <Route path="/invite" element={<AcceptInvite />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
               <Route element={<ProtectedRoute><SubscriptionGate><OrganizationProvider><AppLayout /></OrganizationProvider></SubscriptionGate></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/documents" element={<Navigate to="/" replace />} />
+                <Route path="/documents" element={<Documents />} />
                 <Route path="/documents/new" element={<DocumentNew />} />
                 <Route path="/documents/:id" element={<DocumentDetail />} />
                 <Route path="/documents/:id/prepare" element={<DocumentPrepare />} />
