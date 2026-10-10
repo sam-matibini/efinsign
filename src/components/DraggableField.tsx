@@ -2,7 +2,8 @@ import { useRef, useState, useCallback } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Trash2, X } from "lucide-react";
 import { fontSizeForFieldHeight, isTextLikeField } from "@/lib/fieldFont";
 import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
-import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
+import { companySealDataUrl } from "@/lib/companySeals";
+import { isSealField, sealFromField } from "@/lib/documentFields";
 import { editorFontCss } from "@/lib/editorFonts";
 import { decodeFieldValue, type FieldStyle } from "@/lib/fieldStyle";
 import { clampRect, snapRect } from "@/lib/textLayout";
@@ -152,10 +153,11 @@ export default function DraggableField({
 
   const dirs: HandleDir[] = ["nw", "ne", "sw", "se", "n", "s", "e", "w"];
   const textSize = fontSizeForFieldHeight(height);
-  const seal = fieldType === "seal" ? sealByStampLabel(value) : null;
+  const seal = sealFromField({ field_type: fieldType, value });
+  const asSeal = fieldType === "seal" || isSealField({ field_type: fieldType, value });
   const check = fieldType === "checkmark" || fieldType === "checkbox" ? checkAppearance(value) : null;
-  const showChrome = hovered || dragging || selected || fieldType === "signature" || fieldType === "initials" || fieldType === "seal";
-  const textLike = isTextLikeField(fieldType);
+  const showChrome = hovered || dragging || selected || fieldType === "signature" || fieldType === "initials" || asSeal;
+  const textLike = isTextLikeField(fieldType) && !asSeal;
   const decorations = [style.underline ? "underline" : "", style.strikethrough ? "line-through" : ""].filter(Boolean).join(" ");
 
   const nudge = (dx: number, dy: number) => onMove(id, Math.max(0, x + dx), Math.max(0, y + dy));
@@ -168,10 +170,10 @@ export default function DraggableField({
         top: y,
         width,
         height,
-        borderColor: color,
+        borderColor: asSeal ? (showChrome ? color : "transparent") : color,
         outline: selected ? "2px dashed hsl(var(--primary))" : "none",
         outlineOffset: 2,
-        backgroundColor: (fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image")
+        backgroundColor: asSeal || ((fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image"))
           ? "transparent"
           : style.backgroundColor && style.backgroundColor !== "none"
             ? style.backgroundColor
@@ -181,14 +183,20 @@ export default function DraggableField({
       onMouseDown={handleMouseDown}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        if (onEdit && (textLike || fieldType === "signature" || fieldType === "initials")) onEdit(id);
+        if (onEdit && !asSeal && (textLike || fieldType === "signature" || fieldType === "initials")) onEdit(id);
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <div className="w-full h-full overflow-hidden flex items-center justify-center pointer-events-none">
-        {(fieldType === "signature" || fieldType === "initials" || fieldType === "seal" || seal) && (value?.startsWith("data:image") || seal) ? (
-          <img src={seal ? companySealDataUrl(seal.id) : value!} alt={fieldType} className="w-full h-full object-contain" draggable={false} />
+        {asSeal ? (
+          seal ? (
+            <img src={companySealDataUrl(seal.id)} alt={seal.legalName} className="w-full h-full object-contain" draggable={false} />
+          ) : (
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Seal</span>
+          )
+        ) : (fieldType === "signature" || fieldType === "initials") && value?.startsWith("data:image") ? (
+          <img src={value} alt={fieldType} className="w-full h-full object-contain" draggable={false} />
         ) : check?.filled ? (
           <span className="font-bold text-green-700 leading-none" style={{ fontSize: textSize }}>{checkGlyph(check.style)}</span>
         ) : textLike && decoded.text ? (

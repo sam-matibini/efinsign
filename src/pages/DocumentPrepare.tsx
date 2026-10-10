@@ -366,6 +366,7 @@ export default function DocumentPrepare() {
 
   const openFieldEditor = (field: DocField) => {
     setSelectedFieldId(field.id);
+    if (isSealField(field)) return;
     if (isTextLikeField(field.field_type)) {
       const decoded = decodeFieldValue(field.value);
       setTextFieldKind(field.field_type === "full_name" || field.field_type === "title" ? field.field_type : "text");
@@ -384,7 +385,7 @@ export default function DocumentPrepare() {
   const handleNextAction = () => {
     const all = selfSignMode ? selfFields : fields;
     const unfilled = nextUnfilledField(all);
-    if (unfilled && isTextLikeField(unfilled.field_type)) {
+    if (unfilled && isTextLikeField(unfilled.field_type) && !isSealField(unfilled)) {
       openFieldEditor(unfilled);
       toast.message(`Next: ${unfilled.field_type.replaceAll("_", " ")}`);
       return;
@@ -700,9 +701,9 @@ export default function DocumentPrepare() {
             width={f.width}
             height={f.height}
             color={signer?.color || "#3B82F6"}
-            label={f.field_type}
+            label={isSealField(f) ? "seal" : f.field_type}
             value={f.value}
-            fieldType={f.field_type}
+            fieldType={isSealField(f) ? "seal" : f.field_type}
             selected={selectedFieldId === f.id}
             onSelect={setSelectedFieldId}
             onEdit={(fieldId) => {
@@ -1011,7 +1012,7 @@ export default function DocumentPrepare() {
                             <div className="flex items-center gap-2">
                               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: signer?.color }} />
                               <span className="capitalize">{isSealField(f) ? "seal" : f.field_type.replaceAll("_", " ")}</span>
-                              {f.value && !f.value.startsWith("data:") && (
+                              {f.value && !f.value.startsWith("data:") && !isSealField(f) && (
                                 <span className="text-[10px] text-muted-foreground truncate max-w-[7rem]">{f.value}</span>
                               )}
                               <Badge variant="outline" className="text-[10px] px-1 py-0">

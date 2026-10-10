@@ -20,6 +20,7 @@ import { closeSigningWindow } from "@/lib/closeSigningWindow";
 import { format } from "date-fns";
 import { EmbedProvider, useEmbed } from "@/components/embed/EmbedProvider";
 import { useEmbedConfig } from "@/components/embed/EmbedConfig";
+import { isSealField } from "@/lib/documentFields";
 
 type FieldWithValue = Tables<"document_fields"> & { localValue?: string };
 
@@ -131,6 +132,7 @@ function EmbedSignInner() {
   useEffect(() => { loadSigningData(); }, [loadSigningData]);
 
   const openField = useCallback((field: FieldWithValue) => {
+    if (isSealField({ field_type: field.field_type, value: field.localValue || field.value })) return;
     setActiveField(field);
     if (field.field_type === "signature" || field.field_type === "initials") {
       setSignatureDialogOpen(true);

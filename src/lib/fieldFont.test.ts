@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fontSizeForFieldHeight, stepFieldHeight } from "./fieldFont";
 import { checkAppearance, checkGlyph } from "./checkStyles";
-import { COMPANY_SEALS, companySealSvg } from "./companySeals";
+import { COMPANY_SEALS, companySealSvg, isSealField, sealByStampLabel, sealFromField } from "./companySeals";
 
 describe("fontSizeForFieldHeight", () => {
   it("grows when the field is taller", () => {
@@ -39,5 +39,11 @@ describe("company seals", () => {
     expect(svg).not.toContain(">eF<");
     expect(companySealSvg("efinmoney")).toContain("font-size=\"20\"");
     expect(companySealSvg("efinmoney")).toContain("seal-name-top");
+  });
+
+  it("treats stored seal: labels as stamps even when field_type is text", () => {
+    expect(sealByStampLabel("seal:efinmoney")?.id).toBe("efinmoney");
+    expect(isSealField({ field_type: "text", value: "seal:efinmoney" })).toBe(true);
+    expect(sealFromField({ field_type: "text", value: "seal:efinmoney" })?.legalName).toBe("eFinMoney");
   });
 });

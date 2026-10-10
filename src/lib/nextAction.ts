@@ -11,12 +11,18 @@ export function nextUnplacedType<T extends { field_type: string }>(
   return order[0];
 }
 
+function looksLikeSeal<T extends { field_type: string; value?: string | null; localValue?: string | null }>(f: T) {
+  const raw = `${f.field_type || ""} ${f.localValue || ""} ${f.value || ""}`;
+  return f.field_type === "seal" || raw.includes("seal:");
+}
+
 export function nextUnfilledField<T extends { id: string; field_type: string; value?: string | null; localValue?: string | null }>(
   fields: T[],
   afterId?: string,
 ): T | null {
   const actionable = fields.filter((f) =>
-    ["signature", "initials", "text", "date", "full_name", "title", "name"].includes(f.field_type),
+    ["signature", "initials", "text", "date", "full_name", "title", "name"].includes(f.field_type)
+    && !looksLikeSeal(f),
   );
   if (actionable.length === 0) return null;
   const filled = (f: T) => {

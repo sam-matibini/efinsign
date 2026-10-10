@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeFieldValue, encodeFieldValue } from "@/lib/fieldStyle";
 import { nextUnfilledField, nextUnplacedType } from "@/lib/nextAction";
+import { isSealField, sealFromField } from "@/lib/companySeals";
 
 describe("field style encoding", () => {
   it("round-trips Word formatting without breaking plain text", () => {
@@ -10,6 +11,27 @@ describe("field style encoding", () => {
     expect(decoded.text).toBe("Sam Matibini");
     expect(decoded.style.bold).toBe(true);
     expect(decoded.style.fontFamily).toBe("georgia");
+  });
+});
+
+describe("seal fields stored as text", () => {
+  it("recognizes fallback text values as company seals, not wrap text", () => {
+    const stored = { field_type: "text", value: "seal:efinmoney" };
+    expect(isSealField(stored)).toBe(true);
+    expect(sealFromField(stored)?.id).toBe("efinmoney");
+    expect(isSealField({ field_type: "seal", value: "seal:efintax" })).toBe(true);
+    expect(isSealField({ field_type: "text", value: "Hello" })).toBe(false);
+    const packed = encodeFieldValue("seal:efinmoney", { bold: true });
+    expect(isSealField({ field_type: "text", value: packed })).toBe(true);
+    expect(sealFromField({ field_type: "text", value: packed })?.id).toBe("efinmoney");
+  });
+
+  it("skips seal-as-text when picking the next field to fill", () => {
+    const next = nextUnfilledField([
+      { id: "seal", field_type: "text", value: "seal:efinmoney" },
+      { id: "name", field_type: "text", value: "" },
+    ]);
+    expect(next?.id).toBe("name");
   });
 });
 

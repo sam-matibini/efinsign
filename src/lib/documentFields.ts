@@ -1,12 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { sealByStampLabel } from "@/lib/companySeals";
+import { isSealField, sealFromField } from "@/lib/companySeals";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type DocField = Tables<"document_fields">;
-
-export function isSealField(field: { field_type?: string | null; value?: string | null }) {
-  return field.field_type === "seal" || !!sealByStampLabel(field.value);
-}
+export { isSealField, sealFromField };
 
 export async function insertDocumentField(row: TablesInsert<"document_fields">) {
   const first = await supabase.from("document_fields").insert(row).select().single();

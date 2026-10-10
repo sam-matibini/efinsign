@@ -2,7 +2,7 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { wrapTextToWidth } from "@/lib/textWrap";
 import { pdfFontSizeForField } from "@/lib/fieldFont";
 import { checkAppearance } from "@/lib/checkStyles";
-import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
+import { companySealSvg, sealFromField, svgToPngBytes } from "@/lib/companySeals";
 import { drawCheckOnPage } from "@/components/pdf-editor/savePdfDocument";
 import { editorFontPdf } from "@/lib/editorFonts";
 import { decodeFieldValue } from "@/lib/fieldStyle";
@@ -173,9 +173,9 @@ export async function generateSignedPdf(
     const pdfW = field.width / SCALE;
     const pdfH = field.height / SCALE;
 
-    if (field.field_type === "seal" || sealByStampLabel(field.value)) {
-      const seal = sealByStampLabel(field.value);
-      if (!seal) continue;
+    const placedSeal = sealFromField(field);
+    if (placedSeal) {
+      const seal = placedSeal;
       const png = await svgToPngBytes(companySealSvg(seal.id));
       const sealImage = await pdfDoc.embedPng(png);
       page.drawImage(sealImage, { x: pdfX, y: pdfY, width: pdfW, height: pdfH });

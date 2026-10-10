@@ -1,3 +1,4 @@
+import { decodeFieldValue } from "@/lib/fieldStyle";
 import { getActiveSealLogo } from "@/lib/orgSeal";
 
 export const COMPANY_SEALS = [
@@ -18,7 +19,19 @@ export const COMPANY_SEALS = [
 export type CompanySealId = (typeof COMPANY_SEALS)[number]["id"];
 
 export function sealByStampLabel(label: string | null | undefined) {
-  return COMPANY_SEALS.find((s) => s.stampLabel === label) || null;
+  if (!label) return null;
+  const raw = label.trim();
+  const exact = COMPANY_SEALS.find((s) => s.stampLabel === raw || s.id === raw);
+  if (exact) return exact;
+  return COMPANY_SEALS.find((s) => raw.includes(s.stampLabel)) || null;
+}
+
+export function sealFromField(field: { field_type?: string | null; value?: string | null }) {
+  return sealByStampLabel(field.value) || sealByStampLabel(decodeFieldValue(field.value).text);
+}
+
+export function isSealField(field: { field_type?: string | null; value?: string | null }) {
+  return field.field_type === "seal" || !!sealFromField(field);
 }
 
 /** Concentric layout: logo disk, gap, name band, gold ring, outer rim. */

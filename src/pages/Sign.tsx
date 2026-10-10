@@ -29,6 +29,8 @@ import { decodeFieldValue, encodeFieldValue, EMPTY_FIELD_STYLE, type FieldStyle 
 import { format } from "date-fns";
 import { fontSizeForFieldHeight } from "@/lib/fieldFont";
 import { checkAppearance, checkGlyph } from "@/lib/checkStyles";
+import { companySealDataUrl } from "@/lib/companySeals";
+import { isSealField, sealFromField } from "@/lib/documentFields";
 
 type FieldWithValue = Tables<"document_fields"> & { localValue?: string };
 
@@ -221,6 +223,9 @@ export default function Sign() {
     setActiveField(field);
     setHighlightedFieldId(field.id);
 
+    if (isSealField({ field_type: field.field_type, value: field.localValue || field.value })) {
+      return;
+    }
     if (type === "signature" || type === "initials") {
       setSignatureDialogOpen(true);
     } else if (type === "date") {
@@ -413,6 +418,8 @@ export default function Sign() {
         {pageFields.map(field => {
           const isSignatureType = field.field_type === "signature" || field.field_type === "initials";
           const isCheckType = field.field_type === "checkmark" || field.field_type === "checkbox";
+          const placedSeal = sealFromField({ field_type: field.field_type, value: field.localValue || field.value });
+          const asSeal = isSealField({ field_type: field.field_type, value: field.localValue || field.value });
           const checkState = isCheckType ? checkAppearance(field.localValue) : null;
           const filled = checkState ? checkState.filled : !!field.localValue;
           const isRequired = REQUIRED_TYPES.includes(field.field_type);
@@ -440,11 +447,17 @@ export default function Sign() {
                 borderColor: filled ? undefined : isHighlighted ? undefined : signer?.color || undefined,
               }}
               onClick={() => handleFieldClick(field)}
-              title={`Click to fill ${field.field_type}`}
+              title={`Click to fill ${asSeal ? "seal" : field.field_type}`}
             >
               {/* Content */}
               {filled ? (
-                isSignatureType ? (
+                asSeal && placedSeal ? (
+                  <img
+                    src={companySealDataUrl(placedSeal.id)}
+                    alt={placedSeal.legalName}
+                    className="w-full h-full object-contain"
+                  />
+                ) : isSignatureType ? (
                   <img
                     src={field.localValue!}
                     alt={field.field_type}
@@ -461,9 +474,9 @@ export default function Sign() {
                 )
               ) : (
                 <div className="w-full h-full flex items-center justify-center gap-1 opacity-70">
-                  {getFieldIcon(field.field_type)}
+                  {getFieldIcon(asSeal ? "seal" : field.field_type)}
                   <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: isHighlighted ? undefined : signer?.color || undefined }}>
-                    {field.field_type}
+                    {asSeal ? "seal" : field.field_type}
                   </span>
                 </div>
               )}
