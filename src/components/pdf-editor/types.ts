@@ -57,11 +57,13 @@ export interface StampAnnotation extends BaseAnnotation {
   height?: number;
 }
 
-export interface DrawingAnnotation {
+export interface DrawingAnnotation extends BaseAnnotation {
   type: "drawing";
-  id: string;
-  pageIndex: number;
+  width: number;
+  height: number;
   imageData: string;
+  rotate?: number;
+  color?: string;
 }
 
 export interface CheckmarkAnnotation extends BaseAnnotation {
@@ -99,6 +101,7 @@ export interface WhiteoutAnnotation extends BaseAnnotation {
   type: "whiteout";
   width: number;
   height: number;
+  color?: string;
 }
 
 export interface SignatureAnnotation extends BaseAnnotation {

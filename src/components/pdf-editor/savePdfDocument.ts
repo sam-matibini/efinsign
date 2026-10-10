@@ -5,7 +5,7 @@ import { editorFontPdf } from "@/lib/editorFonts";
 import { formatDisplayLines } from "@/lib/pendingText";
 import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
 import type { CheckStyle } from "@/lib/checkStyles";
-import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation } from "./types";
+import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation } from "./types";
 
 /** Helvetica/WinAnsi cannot encode many Unicode punctuation characters. */
 export function toWinAnsi(text: string): string {
@@ -171,12 +171,13 @@ export async function savePdfDocument(
       }
       case "whiteout": {
         const wa = ann as WhiteoutAnnotation;
+        const fill = hexToRgb(wa.color && /^#[0-9a-fA-F]{6}$/i.test(wa.color) ? wa.color : "#fffefb");
         page.drawRectangle({
           x: toPdfX(wa.x),
           y: toPdfY(wa.y + wa.height),
           width: (wa.width / cw) * pw,
           height: (wa.height / ch) * ph,
-          color: rgb(1, 1, 1),
+          color: fill,
           borderWidth: 0,
         });
         break;
@@ -199,11 +200,19 @@ export async function savePdfDocument(
         break;
       }
       case "drawing": {
-        if (ann.imageData) {
-          const pngBytes = await fetch(ann.imageData).then((r) => r.arrayBuffer());
-          const pngImage = await newDoc.embedPng(pngBytes);
-          page.drawImage(pngImage, { x: 0, y: 0, width: pw, height: ph, opacity: 1 });
-        }
+        const da = ann as DrawingAnnotation;
+        if (!da.imageData) break;
+        const pngBytes = await fetch(da.imageData).then((r) => r.arrayBuffer());
+        const pngImage = await newDoc.embedPng(pngBytes);
+        const dw = ((da.width || cw) / cw) * pw;
+        const dh = ((da.height || ch) / ch) * ph;
+        page.drawImage(pngImage, {
+          x: toPdfX(da.x ?? 0),
+          y: toPdfY((da.y ?? 0) + (da.height || ch)),
+          width: dw,
+          height: dh,
+          rotate: degrees(-(da.rotate || 0)),
+        });
         break;
       }
       case "checkmark": {

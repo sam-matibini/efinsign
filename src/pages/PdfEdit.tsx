@@ -16,7 +16,7 @@ import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
 import { saveEditedPdfBlob } from "@/lib/saveEditedPdf";
 import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
-import type { Annotation, DrawingAnnotation, EditorFont, ListStyle, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState, SignatureAnnotation, StickyNoteAnnotation } from "@/components/pdf-editor/types";
+import type { Annotation, EditorFont, ListStyle, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState, SignatureAnnotation, StickyNoteAnnotation } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 import { defaultTextBoxHeight, nudgeRect } from "@/lib/textLayout";
@@ -106,7 +106,8 @@ export default function PdfEdit() {
   const [listStyle, setListStyle] = useState<ListStyle>("none");
   const [signatureTargetId, setSignatureTargetId] = useState<string | null>(null);
   const [stickyEditor, setStickyEditor] = useState<{ id: string; text: string } | null>(null);
-  const [drawColor, setDrawColor] = useState("#000000");
+  const [drawColor, setDrawColor] = useState("#111827");
+  const [coverColor, setCoverColor] = useState("#fffefb");
   const [strokeWidth, setStrokeWidth] = useState(3);
   const [selectedStamp, setSelectedStamp] = useState<string | null>(null);
   const [checkmarkSize, setCheckmarkSize] = useState(28);
@@ -440,12 +441,22 @@ export default function PdfEdit() {
     toast.success("Header and footer added to each page");
   }, [headerText, footerText, pages, textFont, textBold, setAnnotations]);
 
-  const handleDrawingComplete = useCallback((pageIndex: number, imageData: string) => {
-    setAnnotations((prev) => {
-      const filtered = prev.filter((a) => !(a.type === "drawing" && a.pageIndex === pageIndex));
-      return [...filtered, { type: "drawing", id: genId(), pageIndex, imageData }];
-    });
-  }, [setAnnotations]);
+  const handleDrawingComplete = useCallback((pageIndex: number, stroke: { imageData: string; x: number; y: number; width: number; height: number }) => {
+    const id = genId();
+    setAnnotations((prev) => [...prev, {
+      type: "drawing",
+      id,
+      pageIndex,
+      x: stroke.x,
+      y: stroke.y,
+      width: stroke.width,
+      height: stroke.height,
+      imageData: stroke.imageData,
+      rotate: 0,
+      color: drawColor,
+    }]);
+    setSelectedAnnotationId(id);
+  }, [drawColor, setAnnotations]);
 
   const handleHighlightComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
     setAnnotations((prev) => [...prev, {
@@ -455,8 +466,10 @@ export default function PdfEdit() {
   }, [highlightColor, highlightOpacity, setAnnotations]);
 
   const handleWhiteoutComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
-    setAnnotations((prev) => [...prev, { type: "whiteout", id: genId(), pageIndex, x, y, width: w, height: h }]);
-  }, [setAnnotations]);
+    const id = genId();
+    setAnnotations((prev) => [...prev, { type: "whiteout", id, pageIndex, x, y, width: w, height: h, color: coverColor }]);
+    setSelectedAnnotationId(id);
+  }, [coverColor, setAnnotations]);
 
   const handleShapeComplete = useCallback((pageIndex: number, x: number, y: number, w: number, h: number) => {
     setAnnotations((prev) => [...prev, {
@@ -533,6 +546,7 @@ export default function PdfEdit() {
         lineHeight={lineHeight} setLineHeight={(n) => { setLineHeight(n); patchSelectedText({ lineHeight: n }); }}
         listStyle={listStyle} setListStyle={(s) => { setListStyle(s); patchSelectedText({ listStyle: s }); }}
         drawColor={drawColor} setDrawColor={setDrawColor}
+        coverColor={coverColor} setCoverColor={setCoverColor}
         strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
         selectedStamp={selectedStamp} setSelectedStamp={setSelectedStamp}
         checkmarkSize={checkmarkSize} setCheckmarkSize={setCheckmarkSize}
@@ -578,7 +592,6 @@ export default function PdfEdit() {
           <div className="flex flex-col items-center gap-4">
             {pages.map((pageState, index) => {
               if (pageState.deleted) return null;
-              const drawingAnn = annotations.find((a) => a.type === "drawing" && a.pageIndex === index) as DrawingAnnotation | undefined;
               const visiblePage = pages.slice(0, index + 1).filter((p) => !p.deleted).length;
               const visibleTotal = pages.filter((p) => !p.deleted).length;
               const nextPage = pages.findIndex((p, i) => i > index && !p.deleted);
@@ -602,8 +615,7 @@ export default function PdfEdit() {
                       color={drawColor}
                       strokeWidth={strokeWidth}
                       active
-                      existingDrawing={drawingAnn?.imageData}
-                      onDrawingComplete={(data) => handleDrawingComplete(index, data)}
+                      onStrokeComplete={(stroke) => handleDrawingComplete(index, stroke)}
                     />
                   )}
 
@@ -619,8 +631,8 @@ export default function PdfEdit() {
                     active={tool === "whiteout"}
                     onActivate={() => setActivePageIndex(index)}
                     onComplete={(x, y, w, h) => handleWhiteoutComplete(index, x, y, w, h)}
-                    previewColor="#ffffff"
-                    previewOpacity={0.92}
+                    previewColor={coverColor}
+                    previewOpacity={0.88}
                   />
 
                   <DragDrawCanvas
@@ -664,7 +676,7 @@ export default function PdfEdit() {
                       pageWidth={canvasRefs.current.get(pageState.pageNum)?.width || 900}
                       pageHeight={canvasRefs.current.get(pageState.pageNum)?.height || 1200}
                       otherRects={annotations
-                        .filter((a) => a.pageIndex === index && a.id !== editingText.id && a.type !== "drawing")
+                        .filter((a) => a.pageIndex === index && a.id !== editingText.id)
                         .flatMap((a) => ("x" in a && "y" in a)
                           ? [{ x: a.x, y: a.y, w: ("width" in a && a.width) ? a.width : 40, h: ("height" in a && a.height) ? a.height : 24 }]
                           : [])}

@@ -31,6 +31,8 @@ const toolbarProps = {
   setListStyle: vi.fn(),
   drawColor: "#000",
   setDrawColor: vi.fn(),
+  coverColor: "#fffefb",
+  setCoverColor: vi.fn(),
   strokeWidth: 2,
   setStrokeWidth: vi.fn(),
   selectedStamp: null,
@@ -85,6 +87,12 @@ describe("PDF editor enhancements", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(toolbarProps.setTool).toHaveBeenCalledWith("sticky");
+    rerender(<PdfEditorToolbar {...toolbarProps} tool="draw" />);
+    expect(screen.getByTitle("Navy")).toBeInTheDocument();
+    expect(screen.getByTitle("Crimson")).toBeInTheDocument();
+    rerender(<PdfEditorToolbar {...toolbarProps} tool="whiteout" />);
+    expect(screen.getByTitle("Ivory")).toBeInTheDocument();
+    expect(screen.getByTitle("Parchment")).toBeInTheDocument();
     rerender(<PdfEditorToolbar {...toolbarProps} tool="shape" />);
     expect(screen.getByTitle("Triangle")).toBeInTheDocument();
     expect(screen.getByTitle("Diamond")).toBeInTheDocument();

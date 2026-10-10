@@ -13,6 +13,7 @@ import {
 import type { EditorFont, ListStyle, ToolMode, ShapeType, TextAlign } from "./types";
 import { CHECK_STYLES, type CheckStyle } from "@/lib/checkStyles";
 import { EDITOR_FONTS, HIGHLIGHT_BG_PRESETS, LINE_SPACING } from "@/lib/editorFonts";
+import { COVER_FINISHES, DRAW_INK_COLORS } from "@/lib/editorMarks";
 
 const HIGHLIGHT_COLORS = [
   { label: "Yellow", value: "#fde047" },
@@ -49,6 +50,8 @@ interface PdfEditorToolbarProps {
   setListStyle: (s: ListStyle) => void;
   drawColor: string;
   setDrawColor: (c: string) => void;
+  coverColor: string;
+  setCoverColor: (c: string) => void;
   strokeWidth: number;
   setStrokeWidth: (w: number) => void;
   selectedStamp: string | null;
@@ -90,7 +93,7 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
     textFont, setTextFont, textBold, setTextBold,
     textItalic, setTextItalic, textUnderline, setTextUnderline, textStrike, setTextStrike,
     textAlign, setTextAlign, lineHeight, setLineHeight, listStyle, setListStyle,
-    drawColor, setDrawColor, strokeWidth, setStrokeWidth,
+    drawColor, setDrawColor, coverColor, setCoverColor, strokeWidth, setStrokeWidth,
     selectedStamp, setSelectedStamp, checkmarkSize, setCheckmarkSize,
     checkStyle, setCheckStyle, onBumpFont,
     highlightColor, setHighlightColor, highlightOpacity, setHighlightOpacity,
@@ -267,8 +270,20 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
       </Popover>
 
       {tool === "draw" && (
-        <div className="flex items-center gap-2">
-          <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {DRAW_INK_COLORS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                className={`h-6 w-6 rounded-full border ${drawColor === c.value ? "ring-2 ring-primary border-transparent" : "border-border"}`}
+                style={{ backgroundColor: c.value }}
+                onClick={() => setDrawColor(c.value)}
+              />
+            ))}
+          </div>
+          <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" title="Custom ink" />
           <Label className="text-xs">Width:</Label>
           <Select value={String(strokeWidth)} onValueChange={(v) => setStrokeWidth(Number(v))}>
             <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
@@ -278,6 +293,25 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
               ))}
             </SelectContent>
           </Select>
+          <span className="text-[10px] text-muted-foreground">Draw, then drag, rotate, or delete the stroke.</span>
+        </div>
+      )}
+
+      {tool === "whiteout" && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {COVER_FINISHES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                className={`h-6 w-6 rounded-sm border shadow-sm ${coverColor === c.value ? "ring-2 ring-primary" : ""}`}
+                style={{ backgroundColor: c.value, borderColor: c.border }}
+                onClick={() => setCoverColor(c.value)}
+              />
+            ))}
+          </div>
+          <input type="color" value={coverColor} onChange={(e) => setCoverColor(e.target.value)} className="h-7 w-7 rounded cursor-pointer" title="Custom cover" />
         </div>
       )}
 

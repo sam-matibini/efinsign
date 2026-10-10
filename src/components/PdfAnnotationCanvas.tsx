@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
+import { cropInkFromCanvas } from "@/lib/editorMarks";
 
 interface PdfAnnotationCanvasProps {
   width: number;
@@ -6,8 +7,7 @@ interface PdfAnnotationCanvasProps {
   color: string;
   strokeWidth: number;
   active: boolean;
-  onDrawingComplete: (imageData: string) => void;
-  existingDrawing?: string;
+  onStrokeComplete: (stroke: { imageData: string; x: number; y: number; width: number; height: number }) => void;
 }
 
 export default function PdfAnnotationCanvas({
@@ -16,8 +16,7 @@ export default function PdfAnnotationCanvas({
   color,
   strokeWidth,
   active,
-  onDrawingComplete,
-  existingDrawing,
+  onStrokeComplete,
 }: PdfAnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
@@ -26,14 +25,8 @@ export default function PdfAnnotationCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, width, height);
-    if (existingDrawing) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0);
-      img.src = existingDrawing;
-    }
-  }, [existingDrawing, width, height]);
+    canvas.getContext("2d")?.clearRect(0, 0, width, height);
+  }, [width, height]);
 
   const getPos = useCallback((e: React.MouseEvent) => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -78,7 +71,10 @@ export default function PdfAnnotationCanvas({
       setDrawing(false);
       lastPoint.current = null;
       const canvas = canvasRef.current;
-      if (canvas) onDrawingComplete(canvas.toDataURL("image/png"));
+      if (!canvas) return;
+      const stroke = cropInkFromCanvas(canvas);
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+      if (stroke) onStrokeComplete(stroke);
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -86,7 +82,7 @@ export default function PdfAnnotationCanvas({
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
-  }, [drawing, strokeTo, onDrawingComplete]);
+  }, [drawing, strokeTo, onStrokeComplete]);
 
   return (
     <canvas

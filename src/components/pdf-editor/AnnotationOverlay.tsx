@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Trash2, GripVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { Trash2, GripVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, RotateCcw, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { clampRect, snapRect } from "@/lib/textLayout";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
@@ -7,7 +7,8 @@ import { checkGlyph } from "@/lib/checkStyles";
 import { companySealDataUrl, sealByStampLabel } from "@/lib/companySeals";
 import { editorFontCss } from "@/lib/editorFonts";
 import { formatDisplayLines } from "@/lib/pendingText";
-import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation } from "./types";
+import { coverFinish } from "@/lib/editorMarks";
+import type { Annotation, ToolMode, TextAnnotation, StampAnnotation, CheckmarkAnnotation, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, WhiteoutAnnotation, SignatureAnnotation, StickyNoteAnnotation, DrawingAnnotation } from "./types";
 
 type ResizeDir = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
@@ -30,7 +31,8 @@ function boxSize(ann: Annotation): { width: number; height: number } | null {
   if (ann.type === "stamp" && ann.width && ann.height) return { width: ann.width, height: ann.height };
   if (
     ann.type === "highlight" || ann.type === "shape" || ann.type === "image" ||
-    ann.type === "whiteout" || ann.type === "signature" || ann.type === "sticky"
+    ann.type === "whiteout" || ann.type === "signature" || ann.type === "sticky" ||
+    ann.type === "drawing"
   ) {
     return { width: ann.width, height: ann.height };
   }
@@ -44,7 +46,7 @@ function isPageDrawTool(tool: ToolMode) {
 }
 
 function isAlwaysInteractive(ann: Annotation) {
-  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp";
+  return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp" || ann.type === "drawing" || ann.type === "whiteout";
 }
 
 interface AnnotationOverlayProps {
@@ -64,7 +66,7 @@ export default function AnnotationOverlay({
   annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky,
 }: AnnotationOverlayProps) {
   const pageRef = useRef<HTMLDivElement>(null);
-  const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing");
+  const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex);
   const isSelectMode = tool === "select";
   const drawingOverPage = isPageDrawTool(tool);
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; w: number; h: number } | null>(null);
@@ -75,6 +77,7 @@ export default function AnnotationOverlay({
   } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const rotateRef = useRef<{ id: string; cx: number; cy: number } | null>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, ann: Annotation) => {
     if (!isSelectMode && !isAlwaysInteractive(ann)) return;
@@ -102,6 +105,29 @@ export default function AnnotationOverlay({
     setResizing(true);
   }, [isSelectMode]);
 
+  const handleRotateDown = useCallback((e: React.MouseEvent, ann: Annotation) => {
+    const box = boxSize(ann);
+    if (!box || !("x" in ann)) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const page = pageRef.current?.getBoundingClientRect();
+    if (!page) return;
+    const cx = page.left + ann.x + box.width / 2;
+    const cy = page.top + ann.y + box.height / 2;
+    rotateRef.current = { id: ann.id, cx, cy };
+    const move = (ev: MouseEvent) => {
+      const deg = (Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90 + 360) % 360;
+      onUpdate(ann.id, { rotate: Math.round(deg) } as any);
+    };
+    const up = () => {
+      rotateRef.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, [onUpdate]);
+
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (resizing && resizeRef.current) {
       const r = resizeRef.current;
@@ -124,7 +150,7 @@ export default function AnnotationOverlay({
       const pageW = pageRef.current?.clientWidth || 0;
       const pageH = pageRef.current?.clientHeight || 0;
       const others = pageAnnotations
-        .filter((a) => a.id !== d.id && a.type !== "drawing")
+        .filter((a) => a.id !== d.id)
         .flatMap((a) => {
           if (!("x" in a) || !("y" in a)) return [];
           const box = boxSize(a);
@@ -140,6 +166,7 @@ export default function AnnotationOverlay({
   const handleMouseUp = useCallback(() => {
     dragRef.current = null;
     resizeRef.current = null;
+    rotateRef.current = null;
     setDragging(false);
     setResizing(false);
     setGuides({ v: null, h: null });
@@ -192,7 +219,9 @@ export default function AnnotationOverlay({
       {pageAnnotations.map((ann) => {
         const isSelected = selectedId === ann.id;
         const box = boxSize(ann);
-        const interactive = !drawingOverPage && (isSelectMode || isAlwaysInteractive(ann));
+        const interactive = drawingOverPage
+          ? ann.type === "drawing" || ann.type === "whiteout"
+          : (isSelectMode || isAlwaysInteractive(ann));
         const common = {
           position: "absolute" as const,
           left: "x" in ann ? ann.x : 0,
@@ -203,6 +232,10 @@ export default function AnnotationOverlay({
           cursor: interactive ? "move" : "default",
           outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
           outlineOffset: 2,
+          transform: ann.type === "drawing" && (ann as DrawingAnnotation).rotate
+            ? `rotate(${(ann as DrawingAnnotation).rotate}deg)`
+            : undefined,
+          transformOrigin: "center center",
         };
 
         const showDelete = isSelected || isAlwaysInteractive(ann);
@@ -250,10 +283,40 @@ export default function AnnotationOverlay({
                     </Button>
                   </>
                 )}
+                {ann.type === "drawing" && (
+                  <>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Rotate left" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { rotate: (((ann as DrawingAnnotation).rotate || 0) - 15 + 360) % 360 } as any); }}>
+                      <RotateCcw className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Rotate right" onClick={(e) => { e.stopPropagation(); onUpdate(ann.id, { rotate: (((ann as DrawingAnnotation).rotate || 0) + 15) % 360 } as any); }}>
+                      <RotateCw className="h-3 w-3" />
+                    </Button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={360}
+                      value={(ann as DrawingAnnotation).rotate || 0}
+                      title={`${Math.round((ann as DrawingAnnotation).rotate || 0)}°`}
+                      className="w-16 h-6"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => onUpdate(ann.id, { rotate: Number(e.target.value) } as any)}
+                    />
+                    <span className="text-[10px] w-7 text-center tabular-nums">{Math.round((ann as DrawingAnnotation).rotate || 0)}°</span>
+                  </>
+                )}
               </div>
             )}
 
             {(isSelected || ann.type === "signature") && renderResizeHandles(ann)}
+            {isSelected && ann.type === "drawing" && (
+              <div
+                className="absolute -top-11 left-1/2 -ml-2 h-4 w-4 rounded-full bg-primary border-2 border-background cursor-grab z-30"
+                title="Drag to rotate 360°"
+                style={{ pointerEvents: "auto" }}
+                onMouseDown={(e) => handleRotateDown(e, ann)}
+              />
+            )}
 
             {ann.type === "text" && (
               <div
@@ -280,10 +343,26 @@ export default function AnnotationOverlay({
                 {formatDisplayLines(ann.text, ann.listStyle).join("\n")}
               </div>
             )}
-            {ann.type === "whiteout" && (
-              <div
-                className="bg-white border border-dashed border-slate-300"
-                style={{ width: (ann as WhiteoutAnnotation).width, height: (ann as WhiteoutAnnotation).height }}
+            {ann.type === "whiteout" && (() => {
+              const finish = coverFinish((ann as WhiteoutAnnotation).color);
+              const fill = (ann as WhiteoutAnnotation).color || finish.value;
+              return (
+                <div
+                  className="w-full h-full rounded-[3px]"
+                  style={{
+                    background: `linear-gradient(180deg, ${fill} 0%, ${fill}ee 100%)`,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.08)`,
+                    border: `1px solid ${finish.border}`,
+                  }}
+                />
+              );
+            })()}
+            {ann.type === "drawing" && (
+              <img
+                src={(ann as DrawingAnnotation).imageData}
+                alt="Drawing"
+                draggable={false}
+                className="select-none w-full h-full object-contain"
               />
             )}
             {ann.type === "stamp" && (
