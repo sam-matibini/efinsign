@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, degrees, type PDFPage } from "pdf-lib";
 import { wrapTextToWidth } from "@/lib/textWrap";
+import { alignedLineX } from "@/lib/textLayout";
 import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySeals";
 import type { CheckStyle } from "@/lib/checkStyles";
 import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
@@ -89,8 +90,9 @@ export async function savePdfDocument(
         const lineHeight = size * 1.25;
         lines.forEach((line, i) => {
           if (!line) return;
+          const lineWidth = textFont.widthOfTextAtSize(line, size);
           page.drawText(line, {
-            x: toPdfX(ta.x),
+            x: alignedLineX(toPdfX(ta.x), maxW, lineWidth, ta.align ?? "left"),
             y: toPdfY(ta.y) - i * lineHeight,
             size,
             font: textFont,

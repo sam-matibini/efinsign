@@ -233,6 +233,7 @@ export default function AnnotationOverlay({
                   fontFamily: editorFontFamily((ann as TextAnnotation).fontFamily),
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
+                  textAlign: (ann as TextAnnotation).align ?? "left",
                   lineHeight: 1.35,
                   opacity: (ann as TextAnnotation).opacity ?? 1,
                   transform: (ann as TextAnnotation).rotate ? `rotate(${(ann as TextAnnotation).rotate}deg)` : undefined,

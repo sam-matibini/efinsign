@@ -15,9 +15,11 @@ import AnnotationOverlay from "@/components/pdf-editor/AnnotationOverlay";
 import DragDrawCanvas from "@/components/pdf-editor/DragDrawCanvas";
 import { savePdfDocument } from "@/components/pdf-editor/savePdfDocument";
 import { saveEditedPdfBlob } from "@/lib/saveEditedPdf";
-import type { Annotation, DrawingAnnotation, EditorFont, TextAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
+import TextBoxEditor from "@/components/pdf-editor/TextBoxEditor";
+import type { Annotation, DrawingAnnotation, EditorFont, TextAlign, TextAnnotation, ToolMode, ShapeType, PageState } from "@/components/pdf-editor/types";
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
+import { defaultTextBoxHeight, nudgeRect } from "@/lib/textLayout";
 import type { CheckStyle } from "@/lib/checkStyles";
 import { sealByStampLabel } from "@/lib/companySeals";
 import PageDemarcator from "@/components/PageDemarcator";
@@ -84,22 +86,6 @@ export default function PdfEdit() {
     });
   }, [syncUndoRedoState]);
 
-  // Keyboard shortcuts for undo/redo
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        e.preventDefault();
-        if (e.shiftKey) redo(); else undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
-        e.preventDefault();
-        redo();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
-
   // Tool state
   const [tool, setTool] = useState<ToolMode>("select");
   const [fontSize, setFontSize] = useState(14);
@@ -120,7 +106,15 @@ export default function PdfEdit() {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [editingText, setEditingText] = useState<{ pageIndex: number; x: number; y: number; id?: string; width?: number } | null>(null);
+  const [editingText, setEditingText] = useState<{
+    pageIndex: number;
+    x: number;
+    y: number;
+    id?: string;
+    width?: number;
+    height?: number;
+    align?: TextAlign;
+  } | null>(null);
   const [textValue, setTextValue] = useState("");
   const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [watermarkText, setWatermarkText] = useState("DRAFT");
@@ -131,6 +125,40 @@ export default function PdfEdit() {
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const renderTasksRef = useRef<Map<number, any>>(new Map());
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (typing || editingText || !selectedAnnotationId) return;
+      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setAnnotations((prev) => prev.map((ann) => {
+          if (ann.id !== selectedAnnotationId || !("x" in ann)) return ann;
+          const next = nudgeRect(
+            { x: ann.x, y: ann.y, w: ("width" in ann && ann.width) ? ann.width : 40, h: ("height" in ann && ann.height) ? ann.height : 24 },
+            e.key,
+            e.shiftKey,
+            4000,
+            4000,
+          );
+          return { ...ann, x: next.x, y: next.y };
+        }));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo, editingText, selectedAnnotationId, setAnnotations]);
 
   // Clear selection when switching tools
   useEffect(() => { setSelectedAnnotationId(null); }, [tool]);
@@ -213,7 +241,12 @@ export default function PdfEdit() {
       const y = e.clientY - rect.top;
 
       if (tool === "text") {
-        setEditingText({ pageIndex, x, y });
+        setEditingText({
+          pageIndex, x, y,
+          width: DEFAULT_TEXT_BOX_WIDTH,
+          height: defaultTextBoxHeight(fontSize),
+          align: "left",
+        });
         setTextValue("");
       } else if (tool === "stamp" && selectedStamp) {
         const seal = sealByStampLabel(selectedStamp);
@@ -227,7 +260,7 @@ export default function PdfEdit() {
         setAnnotations((prev) => [...prev, { type: "image", id: genId(), pageIndex, x, y, width: 150, height: 150, imageData: pendingImage }]);
       }
     },
-    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations]
+    [tool, selectedStamp, checkmarkSize, checkStyle, pendingImage, pages, setAnnotations, fontSize]
   );
 
   const textCommitRef = useRef(false);
@@ -237,7 +270,7 @@ export default function PdfEdit() {
     textCommitRef.current = true;
     setTimeout(() => { textCommitRef.current = false; }, 0);
     const width = editingText.width || DEFAULT_TEXT_BOX_WIDTH;
-    const height = estimateWrappedHeight(textValue.trim(), fontSize, width);
+    const height = editingText.height || estimateWrappedHeight(textValue.trim(), fontSize, width);
     const next: TextAnnotation = {
       type: "text",
       id: editingText.id || genId(),
@@ -251,6 +284,7 @@ export default function PdfEdit() {
       color: textColor,
       fontFamily: textFont,
       bold: textBold,
+      align: editingText.align ?? "left",
     };
     setAnnotations((prev) => editingText.id
       ? prev.map((a) => a.id === editingText.id ? { ...a, ...next } : a)
@@ -266,7 +300,15 @@ export default function PdfEdit() {
     if (ann.fontFamily) setTextFont(ann.fontFamily);
     setTextBold(!!ann.bold);
     setTextValue(ann.text);
-    setEditingText({ pageIndex: ann.pageIndex, x: ann.x, y: ann.y, id: ann.id, width: ann.width });
+    setEditingText({
+      pageIndex: ann.pageIndex,
+      x: ann.x,
+      y: ann.y,
+      id: ann.id,
+      width: ann.width,
+      height: ann.height,
+      align: ann.align ?? "left",
+    });
   }, []);
 
   const applyWatermark = useCallback(() => {
@@ -376,7 +418,10 @@ export default function PdfEdit() {
     try {
       const pdfBytes = await savePdfDocument(pdfUrl, pages, annotations, canvasRefs.current);
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-      await saveEditedPdfBlob(doc.id, doc.file_path, blob);
+      await saveEditedPdfBlob(doc.id, doc.file_path, blob, {
+        organizationId: doc.organization_id,
+        userId: user?.id,
+      });
       toast.success("PDF saved successfully");
       navigate(`/documents/${id}`);
     } catch (err: any) {
@@ -506,34 +551,31 @@ export default function PdfEdit() {
                   />
 
                   {editingText?.pageIndex === index && (
-                    <div
-                      className="absolute z-20"
-                      style={{ left: editingText.x, top: editingText.y }}
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <textarea
-                        autoFocus
-                        value={textValue}
-                        onChange={(e) => setTextValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmText(); }
-                          if (e.key === "Escape") setEditingText(null);
-                        }}
-                        onBlur={confirmText}
-                        rows={3}
-                        className="rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        style={{
-                          fontSize,
-                          width: editingText.width || DEFAULT_TEXT_BOX_WIDTH,
-                          color: textColor,
-                          fontWeight: textBold ? 700 : 400,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          lineHeight: 1.35,
-                        }}
-                      />
-                    </div>
+                    <TextBoxEditor
+                      x={editingText.x}
+                      y={editingText.y}
+                      width={editingText.width || DEFAULT_TEXT_BOX_WIDTH}
+                      height={editingText.height || defaultTextBoxHeight(fontSize)}
+                      text={textValue}
+                      fontSize={fontSize}
+                      align={editingText.align ?? "left"}
+                      color={textColor}
+                      fontFamily={textFont === "times" ? "Times New Roman, Times, serif" : textFont === "courier" ? "Courier New, Courier, monospace" : "Helvetica, Arial, sans-serif"}
+                      bold={textBold}
+                      pageWidth={canvasRefs.current.get(pageState.pageNum)?.width || 900}
+                      pageHeight={canvasRefs.current.get(pageState.pageNum)?.height || 1200}
+                      otherRects={annotations
+                        .filter((a) => a.pageIndex === index && a.id !== editingText.id && a.type !== "drawing")
+                        .flatMap((a) => ("x" in a && "y" in a)
+                          ? [{ x: a.x, y: a.y, w: ("width" in a && a.width) ? a.width : 40, h: ("height" in a && a.height) ? a.height : 24 }]
+                          : [])}
+                      onChange={(next) => {
+                        setTextValue(next.text);
+                        setEditingText((prev) => prev ? { ...prev, ...next } : prev);
+                      }}
+                      onCommit={confirmText}
+                      onCancel={() => setEditingText(null)}
+                    />
                   )}
                 </div>
                 <PageDemarcator

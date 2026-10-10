@@ -1,4 +1,7 @@
 import type { CheckStyle } from "@/lib/checkStyles";
+import type { TextAlign } from "@/lib/textLayout";
+
+export type { TextAlign };
 
 export type { CheckStyle };
 export type ToolMode = "select" | "text" | "draw" | "stamp" | "checkmark" | "highlight" | "shape" | "image" | "whiteout";
@@ -26,6 +29,7 @@ export interface TextAnnotation extends BaseAnnotation {
   bold?: boolean;
   opacity?: number;
   rotate?: number;
+  align?: TextAlign;
 }
 
 export interface StampAnnotation extends BaseAnnotation {

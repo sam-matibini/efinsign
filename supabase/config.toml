@@ -15,3 +15,6 @@ verify_jwt = false
 # queued webhooks (e.g. document.completed on signing) are never delivered.
 [functions.dispatch-webhooks]
 verify_jwt = false
+
+[functions.save-edited-pdf]
+verify_jwt = true

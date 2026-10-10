@@ -24,6 +24,9 @@ interface TextBoxEditorProps {
   text: string;
   fontSize: number;
   align: TextAlign;
+  color?: string;
+  fontFamily?: string;
+  bold?: boolean;
   pageWidth: number;
   pageHeight: number;
   otherRects: { x: number; y: number; w: number; h: number }[];
@@ -33,7 +36,7 @@ interface TextBoxEditorProps {
 }
 
 export default function TextBoxEditor({
-  x, y, width, height, text, fontSize, align, pageWidth, pageHeight, otherRects,
+  x, y, width, height, text, fontSize, align, color, fontFamily, bold, pageWidth, pageHeight, otherRects,
   onChange, onCommit, onCancel,
 }: TextBoxEditorProps) {
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -163,13 +166,20 @@ export default function TextBoxEditor({
               e.preventDefault();
               onCancel();
             }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               onCommit();
             }
           }}
-          className="w-full h-full min-h-0 resize-none p-1 text-foreground bg-background/90 border-primary"
-          style={{ fontSize, lineHeight: 1.25, textAlign: align }}
+          className="w-full h-full min-h-0 resize-none p-1 bg-background/90 border-primary"
+          style={{
+            fontSize,
+            lineHeight: 1.25,
+            textAlign: align,
+            color,
+            fontFamily,
+            fontWeight: bold ? 700 : 400,
+          }}
         />
 
         {renderResizeHandles(width, height, (e, dir) => {
