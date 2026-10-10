@@ -34,12 +34,14 @@ export function isSealField(field: { field_type?: string | null; value?: string 
   return field.field_type === "seal" || !!sealFromField(field);
 }
 
-/** Concentric layout: logo disk, gap, name band, gold ring, outer rim. */
+/** Concentric layout: logo disk inset from its ring, name band, gold ring, outer rim. */
 const CX = 160;
 const CY = 160;
-const LOGO_R = 62;
-const LOGO_RING_R = 70;
-const NAME_R = 104;
+const LOGO_RING_R = 78;
+const LOGO_RING_SW = 3;
+const LOGO_CLEARANCE = 3.5;
+const LOGO_R = LOGO_RING_R - LOGO_RING_SW / 2 - LOGO_CLEARANCE;
+const NAME_R = 106;
 const HAIRLINE_R = 132;
 const GOLD_R = 144;
 const OUTER_R = 156;
@@ -50,7 +52,9 @@ function logoImage(logo: string | null | undefined) {
   const box = LOGO_R * 2;
   return `<defs><clipPath id="seal-logo-clip"><circle cx="${CX}" cy="${CY}" r="${LOGO_R}"/></clipPath></defs>
   <circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="#06147a"/>
-  <image href="${href}" x="${CX - LOGO_R}" y="${CY - LOGO_R}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid slice" clip-path="url(#seal-logo-clip)"/>`;
+  <g clip-path="url(#seal-logo-clip)">
+    <image href="${href}" x="${CX - LOGO_R}" y="${CY - LOGO_R}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid slice"/>
+  </g>`;
 }
 
 function ringText(text: string, pathId: string, fill: string, size: number, tracking: number) {
@@ -60,8 +64,11 @@ function ringText(text: string, pathId: string, fill: string, size: number, trac
 function frame(ink: string, gold: string, paper: string) {
   return `<circle cx="${CX}" cy="${CY}" r="${OUTER_R}" fill="${paper}" stroke="${ink}" stroke-width="3.5"/>
   <circle cx="${CX}" cy="${CY}" r="${GOLD_R}" fill="none" stroke="${gold}" stroke-width="7"/>
-  <circle cx="${CX}" cy="${CY}" r="${HAIRLINE_R}" fill="none" stroke="${ink}" stroke-width="1.5"/>
-  <circle cx="${CX}" cy="${CY}" r="${LOGO_RING_R}" fill="none" stroke="${gold}" stroke-width="2.5"/>`;
+  <circle cx="${CX}" cy="${CY}" r="${HAIRLINE_R}" fill="none" stroke="${ink}" stroke-width="1.5"/>`;
+}
+
+function logoRing(gold: string) {
+  return `<circle cx="${CX}" cy="${CY}" r="${LOGO_RING_R}" fill="none" stroke="${gold}" stroke-width="${LOGO_RING_SW}"/>`;
 }
 
 function namePaths() {
@@ -82,10 +89,10 @@ export function companySealSvg(id: CompanySealId, logo: string | null = getActiv
 
   const center = mark || (shortName
     ? `<circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="${ink}"/>
-  <text x="${CX}" y="154" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="30" font-weight="700">eF</text>
-  <text x="${CX}" y="174" text-anchor="middle" fill="${gold}" font-family="Georgia, serif" font-size="10" letter-spacing="2.2">MONEY</text>`
+  <text x="${CX}" y="152" text-anchor="middle" fill="#f8f3e6" font-family="Georgia, serif" font-size="36" font-weight="700">eF</text>
+  <text x="${CX}" y="176" text-anchor="middle" fill="${gold}" font-family="Georgia, serif" font-size="11" letter-spacing="2.2">MONEY</text>`
     : `<circle cx="${CX}" cy="${CY}" r="${LOGO_R}" fill="${ink}"/>
-  <text x="${CX}" y="166" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="24" font-weight="700">ETA</text>`);
+  <text x="${CX}" y="168" text-anchor="middle" fill="#f3e6c4" font-family="Georgia, serif" font-size="28" font-weight="700">ETA</text>`);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 320 320" width="320" height="320">
@@ -94,6 +101,7 @@ export function companySealSvg(id: CompanySealId, logo: string | null = getActiv
   </defs>
   ${frame(ink, gold, paper)}
   ${center}
+  ${logoRing(gold)}
   ${ringText(company, "seal-name-top", ink, nameSize, nameTrack)}
   ${ringText("CORPORATE SEAL", "seal-name-bot", ink, 13, 1.6)}
 </svg>`;

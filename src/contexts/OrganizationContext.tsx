@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { syncSealCache } from "@/lib/orgSeal";
+import { normalizeLogoDataUrl, setActiveSealLogo, syncSealCache, writeOrgSealLogo } from "@/lib/orgSeal";
 
 export interface Organization {
   id: string;
@@ -43,6 +43,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [roles, setRoles] = useState<Record<string, string>>({});
+  const [, setSealLogoTick] = useState(0);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(() => {
     try { return localStorage.getItem(ORG_STORAGE_KEY); } catch { return null; }
   });
@@ -132,6 +133,16 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       return;
     }
     syncSealCache(currentOrg.id, currentOrg.seal_stamp, currentOrg.seal_logo);
+    const raw = currentOrg.seal_logo;
+    if (!raw) return;
+    let cancelled = false;
+    void normalizeLogoDataUrl(raw).then((cropped) => {
+      if (cancelled || cropped === raw) return;
+      writeOrgSealLogo(currentOrg.id, cropped);
+      setActiveSealLogo(cropped);
+      setSealLogoTick((n) => n + 1);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
   }, [currentOrg]);
 
   return (

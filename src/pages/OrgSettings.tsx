@@ -660,7 +660,7 @@ export default function OrgSettings() {
             </div>
             <div className="space-y-2 pt-2">
               <Label>Seal logo icon</Label>
-              <p className="text-xs text-muted-foreground">Place your company icon in the center of the seal, like the eFin gold “e” mark.</p>
+              <p className="text-xs text-muted-foreground">The icon fills the inner circle and stays inside the gold ring, like the eFin gold “e” mark.</p>
               <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="seal-logo-upload" className="text-xs cursor-pointer bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md hover:bg-secondary/80">
                   Upload logo
