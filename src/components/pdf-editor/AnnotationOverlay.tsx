@@ -64,10 +64,12 @@ interface AnnotationOverlayProps {
   onEditSticky?: (ann: StickyNoteAnnotation) => void;
   onEditShape?: (ann: ShapeAnnotation) => void;
   onEditComment?: (ann: CommentAnnotation) => void;
+  editingShapeId?: string | null;
+  onFinishShapeEdit?: () => void;
 }
 
 export default function AnnotationOverlay({
-  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky, onEditShape, onEditComment,
+  annotations, pageIndex, tool, selectedId, onSelect, onDelete, onUpdate, onEditText, onEditSignature, onEditSticky, onEditShape, onEditComment, editingShapeId, onFinishShapeEdit,
 }: AnnotationOverlayProps) {
   const pageRef = useRef<HTMLDivElement>(null);
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex);
@@ -87,6 +89,7 @@ export default function AnnotationOverlay({
     if (!isSelectMode && !isAlwaysInteractive(ann)) return;
     e.stopPropagation();
     onSelect(ann.id);
+    if (ann.type === "shape" && editingShapeId === ann.id) return;
     if ("x" in ann && "y" in ann) {
       const box = boxSize(ann);
       dragRef.current = {
@@ -95,7 +98,7 @@ export default function AnnotationOverlay({
       };
       setDragging(true);
     }
-  }, [isSelectMode, onSelect]);
+  }, [isSelectMode, onSelect, editingShapeId]);
 
   const handleResizeDown = useCallback((e: React.MouseEvent, ann: Annotation, dir: ResizeDir) => {
     const box = boxSize(ann);
@@ -233,7 +236,7 @@ export default function AnnotationOverlay({
           width: box?.width,
           height: box?.height,
           pointerEvents: interactive ? "auto" as const : "none" as const,
-          cursor: interactive ? "move" : "default",
+          cursor: editingShapeId === ann.id ? "text" : interactive ? "move" : "default",
           outline: isSelected ? "2px dashed hsl(var(--primary))" : "none",
           outlineOffset: 2,
           transform: ann.type === "drawing" && (ann as DrawingAnnotation).rotate
@@ -242,7 +245,8 @@ export default function AnnotationOverlay({
           transformOrigin: "center center",
         };
 
-        const showDelete = isSelected || isAlwaysInteractive(ann);
+        const editingThisShape = ann.type === "shape" && editingShapeId === ann.id;
+        const showDelete = (isSelected || isAlwaysInteractive(ann)) && !editingThisShape;
 
         return (
           <div
@@ -314,7 +318,7 @@ export default function AnnotationOverlay({
               </div>
             )}
 
-            {(isSelected || ann.type === "signature") && renderResizeHandles(ann)}
+            {(isSelected || ann.type === "signature") && !editingThisShape && renderResizeHandles(ann)}
             {isSelected && ann.type === "drawing" && (
               <div
                 className="absolute -top-11 left-1/2 -ml-2 h-4 w-4 rounded-full bg-primary border-2 border-background cursor-grab z-30"
@@ -405,30 +409,12 @@ export default function AnnotationOverlay({
             {ann.type === "shape" && (
               <>
                 {renderShape(ann as ShapeAnnotation)}
-                {(ann as ShapeAnnotation).text ? (
-                  <div
-                    className="absolute inset-0 flex items-center overflow-hidden px-2 pointer-events-none"
-                    style={{
-                      justifyContent: (ann as ShapeAnnotation).align === "center" ? "center" : (ann as ShapeAnnotation).align === "right" ? "flex-end" : "flex-start",
-                      fontSize: (ann as ShapeAnnotation).fontSize || 14,
-                      color: (ann as ShapeAnnotation).color || "#111827",
-                      fontFamily: editorFontCss((ann as ShapeAnnotation).fontFamily),
-                      fontWeight: (ann as ShapeAnnotation).bold ? 700 : 400,
-                      fontStyle: (ann as ShapeAnnotation).italic ? "italic" : "normal",
-                      textDecoration: [(ann as ShapeAnnotation).underline ? "underline" : "", (ann as ShapeAnnotation).strikethrough ? "line-through" : ""].filter(Boolean).join(" ") || undefined,
-                      textAlign: (ann as ShapeAnnotation).align || "center",
-                      lineHeight: (ann as ShapeAnnotation).lineHeight || 1.25,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {formatDisplayLines((ann as ShapeAnnotation).text || "", (ann as ShapeAnnotation).listStyle).join("\n")}
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] text-muted-foreground/70">
-                    Double-click to add text
-                  </div>
-                )}
+                <ShapeInnerText
+                  ann={ann as ShapeAnnotation}
+                  editing={editingShapeId === ann.id}
+                  onChange={(text) => onUpdate(ann.id, { text } as Partial<ShapeAnnotation>)}
+                  onFinish={() => onFinishShapeEdit?.()}
+                />
               </>
             )}
             {ann.type === "comment" && (
@@ -479,6 +465,63 @@ export default function AnnotationOverlay({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function shapeTextCss(ann: ShapeAnnotation): React.CSSProperties {
+  return {
+    fontSize: ann.fontSize || 14,
+    color: ann.color || "#111827",
+    fontFamily: editorFontCss(ann.fontFamily),
+    fontWeight: ann.bold ? 700 : 400,
+    fontStyle: ann.italic ? "italic" : "normal",
+    textDecoration: [ann.underline ? "underline" : "", ann.strikethrough ? "line-through" : ""].filter(Boolean).join(" ") || undefined,
+    textAlign: ann.align || "center",
+    lineHeight: ann.lineHeight || 1.25,
+  };
+}
+
+function ShapeInnerText({
+  ann, editing, onChange, onFinish,
+}: {
+  ann: ShapeAnnotation;
+  editing: boolean;
+  onChange: (text: string) => void;
+  onFinish: () => void;
+}) {
+  const style = shapeTextCss(ann);
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={ann.text || ""}
+        placeholder="Type inside this shape"
+        className="absolute inset-0 z-10 w-full h-full bg-transparent border-0 resize-none outline-none p-2"
+        style={style}
+        onMouseDown={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Escape" || (e.key === "Enter" && !e.shiftKey)) {
+            e.preventDefault();
+            onFinish();
+          }
+        }}
+      />
+    );
+  }
+  if (ann.text?.trim()) {
+    return (
+      <div className="absolute inset-0 flex items-center overflow-hidden px-2 pointer-events-none" style={{ ...style, justifyContent: ann.align === "right" ? "flex-end" : ann.align === "left" ? "flex-start" : "center", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        {formatDisplayLines(ann.text, ann.listStyle).join("\n")}
+      </div>
+    );
+  }
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-2">
+      <span className="text-[11px] text-muted-foreground text-center leading-snug whitespace-normal">Double-click to add text</span>
     </div>
   );
 }

@@ -12,7 +12,7 @@ npm run dev
 The Vite app starts on port 8080 by default. Open Edit PDF on a document to use the editor:
 
 - **Text** — Word-like fonts, italic, underline, strikethrough, text and background color, alignment, line spacing, and lists. Inserted text has a delete button. Drag, nudge, snap, and wrap still work.
-- **Shape** — rectangle, rounded, circle, ellipse, line, triangle, diamond, and arrow.
+- **Shape** — rectangle, rounded, circle, ellipse, line, triangle, diamond, and arrow. Type inside the shape (double-click or start typing after you draw it). Word ribbon styles, border, and fill apply to that same shape — not a second text box.
 - **Signature** — place a sign-here box, then draw or type a signature.
 - **Next** — drop a yellow sticky note that points people to the next sign or text action.
 

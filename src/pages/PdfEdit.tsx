@@ -133,7 +133,7 @@ export default function PdfEdit() {
     align?: TextAlign;
   } | null>(null);
   const [textValue, setTextValue] = useState("");
-  const [editingShape, setEditingShape] = useState<ShapeAnnotation | null>(null);
+  const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [commentColor, setCommentColor] = useState<string>(COMMENT_COLORS[0].value);
   const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [watermarkText, setWatermarkText] = useState("DRAFT");
@@ -160,7 +160,7 @@ export default function PdfEdit() {
         redo();
         return;
       }
-      if (typing || editingText || !selectedAnnotationId) return;
+      if (typing || editingText || editingShapeId || !selectedAnnotationId) return;
       if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setAnnotations((prev) => prev.map((ann) => {
@@ -178,10 +178,15 @@ export default function PdfEdit() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, editingText, selectedAnnotationId, setAnnotations]);
+  }, [undo, redo, editingText, editingShapeId, selectedAnnotationId, setAnnotations]);
 
-  // Clear selection when switching tools
-  useEffect(() => { setSelectedAnnotationId(null); }, [tool]);
+  // Clear selection when leaving Select for another tool — not when landing on Select after drawing a shape.
+  useEffect(() => {
+    if (tool !== "select") {
+      setSelectedAnnotationId(null);
+      setEditingShapeId(null);
+    }
+  }, [tool]);
 
   // Load document
   useEffect(() => {
@@ -404,10 +409,7 @@ export default function PdfEdit() {
     if (editingText && patch.align) {
       setEditingText((prev) => prev ? { ...prev, align: patch.align } : prev);
     }
-    if (editingShape) {
-      setEditingShape((prev) => prev ? { ...prev, ...patch } : prev);
-    }
-  }, [editingText, editingShape, selectedAnnotationId, setAnnotations]);
+  }, [editingText, selectedAnnotationId, setAnnotations]);
 
   const patchSelectedShape = useCallback((patch: Partial<ShapeAnnotation>) => {
     if (!selectedAnnotationId) return;
@@ -523,14 +525,14 @@ export default function PdfEdit() {
       text: "",
     }]);
     setSelectedAnnotationId(id);
-    toast.message("Double-click the shape to add Word-formatted text.");
+    setEditingShapeId(id);
+    setTool("select");
   }, [shapeType, shapeStrokeColor, shapeFillColor, shapeStrokeWidth, fontSize, textColor, textFont, textBold, textItalic, textUnderline, textStrike, textAlign, lineHeight, listStyle, setAnnotations]);
 
   const handleEditShape = useCallback((ann: ShapeAnnotation) => {
     setTool("select");
     setSelectedAnnotationId(ann.id);
-    setEditingShape(ann);
-    setTextValue(ann.text || "");
+    setEditingShapeId(ann.id);
     if (ann.fontSize) setFontSize(ann.fontSize);
     if (ann.color) setTextColor(ann.color);
     if (ann.fontFamily) setTextFont(ann.fontFamily);
@@ -544,30 +546,15 @@ export default function PdfEdit() {
     setShapeStrokeWidth(ann.strokeWidth);
   }, []);
 
-  const confirmShapeText = useCallback(() => {
-    if (!editingShape) return;
-    setAnnotations((prev) => prev.map((a) => a.id === editingShape.id && a.type === "shape" ? {
-      ...a,
-      ...editingShape,
-      text: textValue,
-      fontSize,
-      color: textColor,
-      fontFamily: textFont,
-      bold: textBold,
-      italic: textItalic,
-      underline: textUnderline,
-      strikethrough: textStrike,
-      align: textAlign,
-      lineHeight,
-      listStyle,
-    } : a));
-    setEditingShape(null);
-    setTextValue("");
-  }, [editingShape, textValue, fontSize, textColor, textFont, textBold, textItalic, textUnderline, textStrike, textAlign, lineHeight, listStyle, setAnnotations]);
+  const selectAnnotation = useCallback((id: string | null) => {
+    setSelectedAnnotationId(id);
+    setEditingShapeId((cur) => (id && cur && id !== cur ? null : cur));
+  }, []);
 
   const handleDeleteAnnotation = useCallback((annId: string) => {
     setAnnotations((prev) => prev.filter((a) => a.id !== annId));
     setSelectedAnnotationId(null);
+    setEditingShapeId((cur) => (cur === annId ? null : cur));
   }, [setAnnotations]);
 
   const handleUpdateAnnotation = useCallback((annId: string, updates: Partial<Annotation>) => {
@@ -742,49 +729,17 @@ export default function PdfEdit() {
                     pageIndex={index}
                     tool={tool}
                     selectedId={selectedAnnotationId}
-                    onSelect={setSelectedAnnotationId}
+                    onSelect={selectAnnotation}
                     onDelete={handleDeleteAnnotation}
                     onUpdate={handleUpdateAnnotation}
                     onEditText={handleEditText}
                     onEditSignature={(ann) => setSignatureTargetId(ann.id)}
                     onEditSticky={(ann) => setStickyEditor({ id: ann.id, text: ann.text })}
                     onEditShape={handleEditShape}
-                    onEditComment={(ann) => setSelectedAnnotationId(ann.id)}
+                    onEditComment={(ann) => selectAnnotation(ann.id)}
+                    editingShapeId={editingShapeId}
+                    onFinishShapeEdit={() => setEditingShapeId(null)}
                   />
-
-                  {editingShape?.pageIndex === index && (
-                    <TextBoxEditor
-                      x={editingShape.x}
-                      y={editingShape.y}
-                      width={editingShape.width}
-                      height={editingShape.height}
-                      text={textValue}
-                      fontSize={fontSize}
-                      align={textAlign}
-                      color={textColor}
-                      backgroundColor="none"
-                      fontFamily={editorFontCss(textFont)}
-                      bold={textBold}
-                      italic={textItalic}
-                      underline={textUnderline}
-                      strikethrough={textStrike}
-                      lineHeight={lineHeight}
-                      pageWidth={canvasRefs.current.get(pageState.pageNum)?.width || 900}
-                      pageHeight={canvasRefs.current.get(pageState.pageNum)?.height || 1200}
-                      otherRects={[]}
-                      onChange={(next) => {
-                        setTextValue(next.text);
-                        setEditingShape((prev) => prev ? { ...prev, ...next } : prev);
-                      }}
-                      onCommit={confirmShapeText}
-                      onCancel={() => { setEditingShape(null); setTextValue(""); }}
-                      onDelete={() => {
-                        handleDeleteAnnotation(editingShape.id);
-                        setEditingShape(null);
-                        setTextValue("");
-                      }}
-                    />
-                  )}
 
                   {editingText?.pageIndex === index && (
                     <TextBoxEditor
