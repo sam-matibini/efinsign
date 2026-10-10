@@ -37,6 +37,12 @@ function boxSize(ann: Annotation): { width: number; height: number } | null {
   return null;
 }
 
+export const PAGE_DRAW_TOOLS = ["highlight", "whiteout", "shape", "draw"] as const;
+
+function isPageDrawTool(tool: ToolMode) {
+  return (PAGE_DRAW_TOOLS as readonly string[]).includes(tool);
+}
+
 function isAlwaysInteractive(ann: Annotation) {
   return ann.type === "text" || ann.type === "signature" || ann.type === "sticky" || ann.type === "stamp";
 }
@@ -60,6 +66,7 @@ export default function AnnotationOverlay({
   const pageRef = useRef<HTMLDivElement>(null);
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex && a.type !== "drawing");
   const isSelectMode = tool === "select";
+  const drawingOverPage = isPageDrawTool(tool);
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; w: number; h: number } | null>(null);
   const [guides, setGuides] = useState<{ v: number | null; h: number | null }>({ v: null, h: null });
   const resizeRef = useRef<{
@@ -170,7 +177,7 @@ export default function AnnotationOverlay({
     <div
       ref={pageRef}
       className="absolute inset-0"
-      style={{ pointerEvents: isSelectMode ? "auto" : "none" }}
+      style={{ pointerEvents: drawingOverPage ? "none" : isSelectMode ? "auto" : "none" }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
@@ -185,7 +192,7 @@ export default function AnnotationOverlay({
       {pageAnnotations.map((ann) => {
         const isSelected = selectedId === ann.id;
         const box = boxSize(ann);
-        const interactive = isSelectMode || isAlwaysInteractive(ann);
+        const interactive = !drawingOverPage && (isSelectMode || isAlwaysInteractive(ann));
         const common = {
           position: "absolute" as const,
           left: "x" in ann ? ann.x : 0,

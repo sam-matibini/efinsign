@@ -27,6 +27,7 @@ import { sealByStampLabel } from "@/lib/companySeals";
 import PageDemarcator from "@/components/PageDemarcator";
 import SignatureCapture from "@/components/SignatureCapture";
 import { Textarea } from "@/components/ui/textarea";
+import { clampWatermarkSize, watermarkMetrics } from "@/lib/watermark";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -131,6 +132,7 @@ export default function PdfEdit() {
   const [textValue, setTextValue] = useState("");
   const [watermarkOpen, setWatermarkOpen] = useState(false);
   const [watermarkText, setWatermarkText] = useState("DRAFT");
+  const [watermarkSize, setWatermarkSize] = useState(48);
   const [headerFooterOpen, setHeaderFooterOpen] = useState(false);
   const [headerText, setHeaderText] = useState("");
   const [footerText, setFooterText] = useState("");
@@ -249,6 +251,7 @@ export default function PdfEdit() {
   const handlePageClick = useCallback(
     (pageIndex: number, e: React.MouseEvent<HTMLDivElement>) => {
       if (pages[pageIndex]?.deleted) return;
+      setActivePageIndex(pageIndex);
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -384,6 +387,7 @@ export default function PdfEdit() {
   const applyWatermark = useCallback(() => {
     const label = watermarkText.trim();
     if (!label) { toast.error("Enter watermark text"); return; }
+    const box = watermarkMetrics(watermarkSize);
     const additions: TextAnnotation[] = pages
       .map((page, index) => page.deleted ? null : ({
         type: "text" as const,
@@ -392,9 +396,9 @@ export default function PdfEdit() {
         x: 140,
         y: 420,
         text: label,
-        fontSize: 48,
-        width: 460,
-        height: 72,
+        fontSize: box.fontSize,
+        width: box.width,
+        height: box.height,
         color: "#94a3b8",
         fontFamily: "helvetica" as const,
         bold: true,
@@ -405,7 +409,7 @@ export default function PdfEdit() {
     setAnnotations((prev) => [...prev, ...additions]);
     setWatermarkOpen(false);
     toast.success("Watermark added. Drag it if you want it somewhere else.");
-  }, [watermarkText, pages, setAnnotations]);
+  }, [watermarkText, watermarkSize, pages, setAnnotations]);
 
   const applyHeaderFooter = useCallback(() => {
     if (!headerText.trim() && !footerText.trim()) { toast.error("Enter a header or a footer"); return; }
@@ -597,31 +601,34 @@ export default function PdfEdit() {
                       height={canvasRefs.current.get(pageState.pageNum)?.height || 1100}
                       color={drawColor}
                       strokeWidth={strokeWidth}
-                      active={activePageIndex === index}
+                      active
                       existingDrawing={drawingAnn?.imageData}
                       onDrawingComplete={(data) => handleDrawingComplete(index, data)}
                     />
                   )}
 
                   <DragDrawCanvas
-                    active={tool === "highlight" && activePageIndex === index}
+                    active={tool === "highlight"}
+                    onActivate={() => setActivePageIndex(index)}
                     onComplete={(x, y, w, h) => handleHighlightComplete(index, x, y, w, h)}
                     previewColor={highlightColor}
                     previewOpacity={highlightOpacity}
                   />
 
                   <DragDrawCanvas
-                    active={tool === "whiteout" && activePageIndex === index}
+                    active={tool === "whiteout"}
+                    onActivate={() => setActivePageIndex(index)}
                     onComplete={(x, y, w, h) => handleWhiteoutComplete(index, x, y, w, h)}
                     previewColor="#ffffff"
-                    previewOpacity={0.85}
+                    previewOpacity={0.92}
                   />
 
                   <DragDrawCanvas
-                    active={tool === "shape" && activePageIndex === index}
+                    active={tool === "shape"}
+                    onActivate={() => setActivePageIndex(index)}
                     onComplete={(x, y, w, h) => handleShapeComplete(index, x, y, w, h)}
                     previewColor={shapeStrokeColor}
-                    previewOpacity={0.2}
+                    previewOpacity={0.25}
                   />
 
                   <AnnotationOverlay
@@ -707,6 +714,25 @@ export default function PdfEdit() {
           <div className="space-y-2">
             <Label>Text shown across every page</Label>
             <Input value={watermarkText} onChange={(e) => setWatermarkText(e.target.value)} autoFocus />
+            <Label>Size</Label>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-8 px-2" onClick={() => setWatermarkSize((s) => clampWatermarkSize(s - 6))}>A−</Button>
+              <span className="text-sm w-8 text-center tabular-nums">{watermarkSize}</span>
+              <Button type="button" variant="outline" size="sm" className="h-8 px-2" onClick={() => setWatermarkSize((s) => clampWatermarkSize(s + 6))}>A+</Button>
+              <input
+                type="range"
+                min={12}
+                max={120}
+                step={2}
+                value={watermarkSize}
+                onChange={(e) => setWatermarkSize(clampWatermarkSize(Number(e.target.value)))}
+                className="flex-1"
+                aria-label="Watermark size"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-tight" style={{ fontSize: Math.min(22, watermarkSize * 0.45) }}>
+              {watermarkText || "DRAFT"}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setWatermarkOpen(false)}>Cancel</Button>

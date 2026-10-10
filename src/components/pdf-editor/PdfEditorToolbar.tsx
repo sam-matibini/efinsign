@@ -241,6 +241,10 @@ export default function PdfEditorToolbar(props: PdfEditorToolbarProps) {
         </div>
       )}
 
+      {(tool === "highlight" || tool === "whiteout" || tool === "shape" || tool === "draw") && (
+        <span className="text-[10px] text-muted-foreground">Drag on any page to {tool === "whiteout" ? "cover" : tool}.</span>
+      )}
+
       {tool === "signature" && (
         <span className="text-[10px] text-muted-foreground">Click the page to place a signature box. Double-click the box to draw or type a signature.</span>
       )}

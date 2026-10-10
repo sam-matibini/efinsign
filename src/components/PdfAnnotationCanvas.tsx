@@ -43,41 +43,57 @@ export default function PdfAnnotationCanvas({
     };
   }, [width, height]);
 
-  const startDraw = useCallback((e: React.MouseEvent) => {
-    if (!active) return;
-    setDrawing(true);
-    lastPoint.current = getPos(e);
-  }, [active, getPos]);
-
-  const draw = useCallback((e: React.MouseEvent) => {
-    if (!drawing || !active) return;
-    const ctx = canvasRef.current!.getContext("2d")!;
-    const pos = getPos(e);
+  const strokeTo = useCallback((e: { clientX: number; clientY: number }) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !lastPoint.current) return;
+    const ctx = canvas.getContext("2d")!;
+    const rect = canvas.getBoundingClientRect();
+    const pos = {
+      x: (e.clientX - rect.left) * (width / rect.width),
+      y: (e.clientY - rect.top) * (height / rect.height),
+    };
     ctx.strokeStyle = color;
     ctx.lineWidth = strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.moveTo(lastPoint.current!.x, lastPoint.current!.y);
+    ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
     lastPoint.current = pos;
-  }, [drawing, active, color, strokeWidth, getPos]);
+  }, [color, strokeWidth, width, height]);
 
-  const endDraw = useCallback(() => {
+  const startDraw = useCallback((e: React.MouseEvent) => {
+    if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDrawing(true);
+    lastPoint.current = getPos(e);
+  }, [active, getPos]);
+
+  useEffect(() => {
     if (!drawing) return;
-    setDrawing(false);
-    lastPoint.current = null;
-    const dataUrl = canvasRef.current!.toDataURL("image/png");
-    onDrawingComplete(dataUrl);
-  }, [drawing, onDrawingComplete]);
+    const move = (e: MouseEvent) => strokeTo(e);
+    const up = () => {
+      setDrawing(false);
+      lastPoint.current = null;
+      const canvas = canvasRef.current;
+      if (canvas) onDrawingComplete(canvas.toDataURL("image/png"));
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [drawing, strokeTo, onDrawingComplete]);
 
   return (
     <canvas
       ref={canvasRef}
       width={width}
       height={height}
-      className="absolute inset-0"
+      className="absolute inset-0 z-20"
       style={{
         pointerEvents: active ? "auto" : "none",
         cursor: active ? "crosshair" : "default",
@@ -85,9 +101,6 @@ export default function PdfAnnotationCanvas({
         height: "100%",
       }}
       onMouseDown={startDraw}
-      onMouseMove={draw}
-      onMouseUp={endDraw}
-      onMouseLeave={endDraw}
     />
   );
 }

@@ -1,43 +1,65 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 interface DragDrawCanvasProps {
   active: boolean;
   onComplete: (x: number, y: number, width: number, height: number) => void;
   onPoint?: (x: number, y: number) => void;
+  onActivate?: () => void;
   previewColor?: string;
   previewOpacity?: number;
 }
 
-export default function DragDrawCanvas({ active, onComplete, onPoint, previewColor = "#fde047", previewOpacity = 0.3 }: DragDrawCanvasProps) {
+export default function DragDrawCanvas({
+  active,
+  onComplete,
+  onPoint,
+  onActivate,
+  previewColor = "#fde047",
+  previewOpacity = 0.3,
+}: DragDrawCanvasProps) {
   const [rect, setRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rectRef = useRef(rect);
+  rectRef.current = rect;
+
+  const posInPage = (e: { clientX: number; clientY: number }) => {
+    const box = containerRef.current!.getBoundingClientRect();
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
+  };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!active) return;
-    const r = containerRef.current!.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    setRect({ startX: x, startY: y, endX: x, endY: y });
-  }, [active]);
+    e.preventDefault();
+    e.stopPropagation();
+    onActivate?.();
+    const p = posInPage(e);
+    setRect({ startX: p.x, startY: p.y, endX: p.x, endY: p.y });
+  }, [active, onActivate]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  useEffect(() => {
     if (!rect) return;
-    const r = containerRef.current!.getBoundingClientRect();
-    setRect((prev) => prev ? { ...prev, endX: e.clientX - r.left, endY: e.clientY - r.top } : null);
-  }, [rect]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!rect) return;
-    const x = Math.min(rect.startX, rect.endX);
-    const y = Math.min(rect.startY, rect.endY);
-    const w = Math.abs(rect.endX - rect.startX);
-    const h = Math.abs(rect.endY - rect.startY);
-    if (w > 5 && h > 5) {
-      onComplete(x, y, w, h);
-    } else if (onPoint) {
-      onPoint(rect.startX, rect.startY);
-    }
-    setRect(null);
+    const move = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const p = posInPage(e);
+      setRect((prev) => (prev ? { ...prev, endX: p.x, endY: p.y } : null));
+    };
+    const up = () => {
+      const current = rectRef.current;
+      setRect(null);
+      if (!current) return;
+      const x = Math.min(current.startX, current.endX);
+      const y = Math.min(current.startY, current.endY);
+      const w = Math.abs(current.endX - current.startX);
+      const h = Math.abs(current.endY - current.startY);
+      if (w > 5 && h > 5) onComplete(x, y, w, h);
+      else onPoint?.(current.startX, current.startY);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
   }, [rect, onComplete, onPoint]);
 
   if (!active) return null;
@@ -52,23 +74,20 @@ export default function DragDrawCanvas({ active, onComplete, onPoint, previewCol
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-10"
+      className="absolute inset-0 z-20"
       style={{ cursor: "crosshair" }}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
     >
       {preview && (
         <div
-          className="absolute border-2 border-dashed rounded"
+          className="absolute border-2 border-dashed rounded pointer-events-none"
           style={{
             left: preview.left,
             top: preview.top,
             width: preview.width,
             height: preview.height,
             backgroundColor: previewColor,
-            opacity: previewOpacity,
+            opacity: Math.max(0.2, previewOpacity),
             borderColor: previewColor,
           }}
         />
