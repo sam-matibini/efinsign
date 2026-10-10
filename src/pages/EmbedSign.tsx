@@ -278,7 +278,7 @@ function EmbedSignInner() {
         <CheckCircle2 className="h-16 w-16" style={{ color: primaryColor }} />
         <h2 className="text-xl font-bold">Document Signed</h2>
         <p className="text-sm text-muted-foreground">Thank you, {signer?.name}.</p>
-        <Button onClick={() => closeSigningWindow()}>Close</Button>
+        <Button onClick={() => closeSigningWindow("/")}>Close</Button>
       </div>
     );
   }

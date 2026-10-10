@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, PenTool, Type, Calendar, Hash, Check, ArrowDown, Send, User, Briefcase, Download } from "lucide-react";
+import { CheckCircle2, XCircle, PenTool, Type, Calendar, Hash, Check, ArrowDown, Send, User, Briefcase, Download, Save } from "lucide-react";
 import efinsignLogo from "@/assets/efinsign-logo.png";
 import CelebrationConfetti from "@/components/CelebrationConfetti";
 import type { Tables } from "@/integrations/supabase/types";
@@ -60,6 +60,7 @@ export default function Sign() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [senderLabel, setSenderLabel] = useState<string | null>(null);
+  const [savingCopy, setSavingCopy] = useState(false);
 
   // Dialog states
   const [activeField, setActiveField] = useState<FieldWithValue | null>(null);
@@ -94,10 +95,14 @@ export default function Sign() {
     setLoading(true);
     setQueryError(null);
 
-    // Clear any stale local session to prevent invalid JWT errors for anonymous signer access
-    // Use local scope only to avoid network calls that might fail
+    // Drop only an expired local session so a signed-in owner can return to the dashboard.
     try {
-      localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_PROJECT_ID + '-auth-token');
+      const key = "sb-" + import.meta.env.VITE_SUPABASE_PROJECT_ID + "-auth-token";
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const expiresAt = Number(parsed?.expires_at || parsed?.expiresAt || 0);
+      const fresh = !!parsed?.access_token && (expiresAt ? expiresAt * 1000 > Date.now() : true);
+      if (!fresh) localStorage.removeItem(key);
     } catch { /* ignore */ }
 
     let signerData: Tables<"document_signers"> | null = null;
@@ -593,50 +598,49 @@ export default function Sign() {
   );
 
   if (signer.status === "signed" || signed) {
+    const persistSignedCopy = async () => {
+      const { data: docData } = await sb
+        .from("documents")
+        .select("title, file_path, signed_file_path, status")
+        .eq("id", signer.document_id)
+        .maybeSingle();
+      if (docData?.file_path && token) {
+        await generateAndUploadSignedPdf(signer.document_id, docData.file_path, {
+          includeTimestamp,
+          client: sb,
+          accessToken: token,
+        });
+      }
+      return docData;
+    };
+
+    const saveSignedPdf = async () => {
+      setSavingCopy(true);
+      try {
+        await persistSignedCopy();
+        toast.success("Signed document saved");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to save signed document");
+      } finally {
+        setSavingCopy(false);
+      }
+    };
+
     const downloadSignedPdf = async () => {
       try {
-        const { data: docData } = await sb
-          .from("documents")
-          .select("title, file_path, signed_file_path, status")
-          .eq("id", signer.document_id)
-          .maybeSingle();
-
-        // If the signed file isn't there yet but the document is completed,
-        // try to generate it on the fly before downloading.
-        if (
-          docData?.status === "completed" &&
-          !docData?.signed_file_path &&
-          docData?.file_path &&
-          token
-        ) {
-          try {
-            await generateAndUploadSignedPdf(signer.document_id, docData.file_path, {
-              includeTimestamp,
-              client: sb,
-              accessToken: token,
-            });
-          } catch (e) {
-            console.error("On-demand signed PDF generation failed:", e);
-          }
-        }
-
+        const docData = await persistSignedCopy();
         let urlResp = await supabase.functions.invoke("get-signing-pdf", {
           body: { token, variant: "signed" },
         });
-        // Fallback: regenerate then retry once
         if ((urlResp.error || !urlResp.data?.signedUrl) && docData?.file_path && token) {
-          try {
-            await generateAndUploadSignedPdf(signer.document_id, docData.file_path, {
-              includeTimestamp,
-              client: sb,
-              accessToken: token,
-            });
-            urlResp = await supabase.functions.invoke("get-signing-pdf", {
-              body: { token, variant: "signed" },
-            });
-          } catch (e: any) {
-            throw new Error(e?.message || "Failed to regenerate signed PDF");
-          }
+          await generateAndUploadSignedPdf(signer.document_id, docData.file_path, {
+            includeTimestamp,
+            client: sb,
+            accessToken: token,
+          });
+          urlResp = await supabase.functions.invoke("get-signing-pdf", {
+            body: { token, variant: "signed" },
+          });
         }
         if (urlResp.error || !urlResp.data?.signedUrl) {
           throw new Error(urlResp.error?.message || "Failed to create download URL");
@@ -664,16 +668,22 @@ export default function Sign() {
             <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <h1 className="text-2xl font-display font-bold mb-2">Document Signed!</h1>
             <p className="text-muted-foreground">Thank you. All parties will be notified.</p>
-            <p className="text-sm text-muted-foreground mt-2">A signed copy has been sent to your email.</p>
+            <p className="text-sm text-muted-foreground mt-2">Save a copy, then close to return to the dashboard.</p>
             <div className="flex flex-col items-center gap-3 mt-6">
-              <Button size="lg" variant="outline" onClick={downloadSignedPdf} className="gap-2">
+              <Button size="lg" onClick={saveSignedPdf} disabled={savingCopy} className="gap-2 w-full max-w-xs">
+                <Save className="h-4 w-4" />
+                {savingCopy ? "Saving..." : "Save signed document"}
+              </Button>
+              <Button size="lg" variant="outline" onClick={downloadSignedPdf} className="gap-2 w-full max-w-xs">
                 <Download className="h-4 w-4" /> Download Signed Copy
               </Button>
               <Button
                 size="lg"
-                onClick={() => closeSigningWindow()}
+                variant="secondary"
+                className="w-full max-w-xs"
+                onClick={() => closeSigningWindow("/")}
               >
-                😊 Close
+                Close
               </Button>
             </div>
           </CardContent>

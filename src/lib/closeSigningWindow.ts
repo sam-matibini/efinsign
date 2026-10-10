@@ -1,5 +1,5 @@
 /** Close a signing tab. window.close() only works for script-opened windows. */
-export function closeSigningWindow(fallbackPath = "/landing") {
+export function closeSigningWindow(fallbackPath = "/") {
   try {
     if (window.opener && !window.opener.closed) {
       window.close();
