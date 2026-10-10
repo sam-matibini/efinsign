@@ -5,6 +5,17 @@ import { companySealSvg, sealByStampLabel, svgToPngBytes } from "@/lib/companySe
 import type { CheckStyle } from "@/lib/checkStyles";
 import type { Annotation, PageState, HighlightAnnotation, ShapeAnnotation, ImageAnnotation, CheckmarkAnnotation, TextAnnotation, StampAnnotation, WhiteoutAnnotation, EditorFont } from "./types";
 
+/** Helvetica/WinAnsi cannot encode many Unicode punctuation characters. */
+export function toWinAnsi(text: string): string {
+  return text.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, (ch) => {
+    const map: Record<string, string> = {
+      "\u2018": "'", "\u2019": "'", "\u201C": '"', "\u201D": '"',
+      "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u00A0": " ",
+    };
+    return map[ch] ?? "?";
+  });
+}
+
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -82,18 +93,21 @@ export async function savePdfDocument(
     switch (ann.type) {
       case "text": {
         const ta = ann as TextAnnotation;
-        const size = ta.fontSize || 14;
+        const scale = pw / cw;
+        const size = Math.max(6, (ta.fontSize || 14) * scale);
         const textFont = pickFont(ta.fontFamily, ta.bold);
         const color = ta.color && /^#[0-9a-fA-F]{6}$/.test(ta.color) ? hexToRgb(ta.color) : rgb(0, 0, 0);
         const maxW = ((ta.width && ta.width > 0 ? ta.width : 240) / cw) * pw;
-        const lines = wrapTextToWidth(ta.text, maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
+        const safeText = toWinAnsi(ta.text || "");
+        const lines = wrapTextToWidth(safeText, maxW, (sample) => textFont.widthOfTextAtSize(sample, size));
         const lineHeight = size * 1.25;
         lines.forEach((line, i) => {
           if (!line) return;
           const lineWidth = textFont.widthOfTextAtSize(line, size);
+          const y = toPdfY(ta.y) - size * 0.82 - i * lineHeight;
           page.drawText(line, {
             x: alignedLineX(toPdfX(ta.x), maxW, lineWidth, ta.align ?? "left"),
-            y: toPdfY(ta.y) - i * lineHeight,
+            y,
             size,
             font: textFont,
             color,

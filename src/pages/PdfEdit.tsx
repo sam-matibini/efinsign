@@ -20,6 +20,7 @@ import type { Annotation, DrawingAnnotation, EditorFont, TextAlign, TextAnnotati
 import { genId } from "@/components/pdf-editor/types";
 import { DEFAULT_TEXT_BOX_WIDTH, estimateWrappedHeight } from "@/lib/textWrap";
 import { defaultTextBoxHeight, nudgeRect } from "@/lib/textLayout";
+import { textAnnotationFromEditor, withPendingText } from "@/lib/pendingText";
 import type { CheckStyle } from "@/lib/checkStyles";
 import { sealByStampLabel } from "@/lib/companySeals";
 import PageDemarcator from "@/components/PageDemarcator";
@@ -264,34 +265,28 @@ export default function PdfEdit() {
   );
 
   const textCommitRef = useRef(false);
-  const confirmText = useCallback(() => {
-    if (textCommitRef.current) return;
-    if (!editingText || !textValue.trim()) { setEditingText(null); return; }
-    textCommitRef.current = true;
-    setTimeout(() => { textCommitRef.current = false; }, 0);
-    const width = editingText.width || DEFAULT_TEXT_BOX_WIDTH;
-    const height = editingText.height || estimateWrappedHeight(textValue.trim(), fontSize, width);
-    const next: TextAnnotation = {
-      type: "text",
-      id: editingText.id || genId(),
-      pageIndex: editingText.pageIndex,
-      x: editingText.x,
-      y: editingText.y,
-      text: textValue.trim(),
+  const pendingTextAnnotation = useCallback(() => {
+    if (!editingText) return null;
+    return textAnnotationFromEditor({
+      ...editingText,
+      text: textValue,
       fontSize,
-      width,
-      height,
       color: textColor,
       fontFamily: textFont,
       bold: textBold,
-      align: editingText.align ?? "left",
-    };
-    setAnnotations((prev) => editingText.id
-      ? prev.map((a) => a.id === editingText.id ? { ...a, ...next } : a)
-      : [...prev, next]);
+    });
+  }, [editingText, textValue, fontSize, textColor, textFont, textBold]);
+
+  const confirmText = useCallback(() => {
+    if (textCommitRef.current) return;
+    const next = pendingTextAnnotation();
+    if (!next) { setEditingText(null); return; }
+    textCommitRef.current = true;
+    setTimeout(() => { textCommitRef.current = false; }, 0);
+    setAnnotations((prev) => withPendingText(prev, next));
     setEditingText(null);
     setTextValue("");
-  }, [editingText, textValue, fontSize, textColor, textFont, textBold, setAnnotations]);
+  }, [pendingTextAnnotation, setAnnotations]);
 
   const handleEditText = useCallback((ann: TextAnnotation) => {
     setTool("select");
@@ -416,7 +411,14 @@ export default function PdfEdit() {
     if (!pdfUrl || !doc?.file_path) return;
     setSaving(true);
     try {
-      const pdfBytes = await savePdfDocument(pdfUrl, pages, annotations, canvasRefs.current);
+      const pending = pendingTextAnnotation();
+      const toEmbed = withPendingText(annotations, pending);
+      if (pending) {
+        setAnnotations((prev) => withPendingText(prev, pending));
+        setEditingText(null);
+        setTextValue("");
+      }
+      const pdfBytes = await savePdfDocument(pdfUrl, pages, toEmbed, canvasRefs.current);
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
       await saveEditedPdfBlob(doc.id, doc.file_path, blob, {
         organizationId: doc.organization_id,
